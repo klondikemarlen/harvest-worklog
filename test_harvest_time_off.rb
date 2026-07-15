@@ -39,6 +39,18 @@ class HarvestTimeOffTest < Minitest::Test
     assert_includes output.string, "2026-07-17: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
     assert_includes output.string, "2026-07-20: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
   end
+
+  def test_dry_run_can_include_weekends
+    output = StringIO.new
+
+    status = HarvestTimeOff::CLI.run(
+      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--holiday-region", "ca", "--include-weekends", "--dry-run"],
+      output:
+    )
+
+    assert_equal 0, status
+    assert_equal 4, output.string.lines.length
+  end
   def test_cli_requires_a_holiday_region
     error = StringIO.new
 

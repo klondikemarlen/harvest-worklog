@@ -90,6 +90,7 @@ module HarvestTimeOff
         opts.on("--hours HOURS", Float, "Hours per day (default: 7)") { |value| options[:hours] = value }
         opts.on("--notes NOTES", "Optional note on every entry") { |value| options[:notes] = value }
         opts.on("--holiday-region REGION", "Holidays region; repeat for each locality") { |value| options[:holiday_regions] << value.strip.downcase }
+        opts.on("--include-weekends", "Create Saturday and Sunday entries too") { options[:include_weekends] = true }
         opts.on("--dry-run", "Print entries without calling Harvest") { options[:dry_run] = true }
         opts.on("-h", "--help", "Show this help") do
           puts opts
