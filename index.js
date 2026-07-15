@@ -7,13 +7,11 @@ export function timeOffArguments({
   task,
   hours,
   notes,
-  includeWeekends = false,
   dryRun = false,
 }, { defaultHours = 7, holidayRegions = [] } = {}) {
   const args = [from, to, "--project", project, "--task", task, "--hours", String(hours ?? defaultHours)]
   for (const region of holidayRegions) args.push("--holiday-region", region)
   if (notes) args.push("--notes", notes)
-  if (includeWeekends) args.push("--include-weekends")
   if (dryRun) args.push("--dry-run")
   return args
 }
@@ -53,7 +51,6 @@ export function createTimeOffTool(z, { command = "harvest-time-off", defaultHour
       task: z.string().min(1),
       hours: z.number().positive().finite().optional(),
       notes: z.string().min(1).optional(),
-      includeWeekends: z.boolean().optional(),
       dryRun: z.boolean().optional(),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {

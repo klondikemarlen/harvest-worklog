@@ -14,7 +14,6 @@ class HarvestTimeOffTest < Minitest::Test
     to = Date.new(2026, 7, 20)
 
     assert_equal [Date.new(2026, 7, 17), Date.new(2026, 7, 20)], HarvestTimeOff.dates_between(from, to, holiday_regions: ["ca"])
-    assert_equal (from..to).to_a, HarvestTimeOff.dates_between(from, to, include_weekends: true, holiday_regions: ["ca"])
   end
 
   def test_dates_between_excludes_observed_regional_holidays
@@ -40,27 +39,17 @@ class HarvestTimeOffTest < Minitest::Test
     assert_includes output.string, "2026-07-20: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
   end
 
-  def test_dry_run_can_include_weekends
+  def test_cli_defaults_to_yukon_holidays
     output = StringIO.new
 
     status = HarvestTimeOff::CLI.run(
-      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--holiday-region", "ca", "--include-weekends", "--dry-run"],
+      ["2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--dry-run"],
       output:
     )
 
     assert_equal 0, status
-    assert_equal 4, output.string.lines.length
-  end
-  def test_cli_requires_a_holiday_region
-    error = StringIO.new
-
-    status = HarvestTimeOff::CLI.run(
-      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--dry-run"],
-      error:
-    )
-
-    assert_equal 1, status
-    assert_includes error.string, "--holiday-region or HARVEST_HOLIDAY_REGIONS is required"
+    assert_equal 9, output.string.lines.length
+    refute_includes output.string, "2026-08-17"
   end
 
 

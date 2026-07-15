@@ -26,12 +26,11 @@ test("builds a safe CLI argument vector", () => {
       task: "Vacation / PTO",
       hours: 7.5,
       notes: "Vacation",
-      includeWeekends: true,
       dryRun: true,
     }),
     [
       "2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
-      "--hours", "7.5", "--notes", "Vacation", "--include-weekends", "--dry-run",
+      "--hours", "7.5", "--notes", "Vacation", "--dry-run",
     ],
   )
 })

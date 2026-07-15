@@ -27,8 +27,8 @@
       },
       "holidayRegions": {
         "type": "string",
-        "default": "",
-        "description": "Comma-separated Holidays gem regions, such as ca_yt; required unless HARVEST_HOLIDAY_REGIONS is set."
+        "default": "ca_yt",
+        "description": "Comma-separated Holidays regions; defaults to Yukon, Canada."
       },
       "command": {
         "type": "string",

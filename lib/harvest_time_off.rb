@@ -10,15 +10,12 @@ require "harvest_api_v2"
 module HarvestTimeOff
   module_function
 
-  def dates_between(from, to, include_weekends: false, holiday_regions:)
+  def dates_between(from, to, holiday_regions:)
     raise Error, "end date must not be before start date" if to < from
     raise Error, "at least one holiday region is required" if holiday_regions.empty?
 
     holidays = Holidays.between(from, to, *(holiday_regions.map { |region| region.downcase.to_sym } + [:observed])).map { |holiday| holiday[:date] }
-    dates = (from..to).to_a
-    return dates.reject { |date| holidays.include?(date) } if include_weekends
-
-    dates.select { |date| date.workday?(holidays:) }
+    (from..to).select { |date| date.workday?(holidays:) }
   rescue Holidays::InvalidRegion
     raise Error, "invalid holiday region: #{holiday_regions.join(", ")}"
   end
@@ -31,19 +28,14 @@ module HarvestTimeOff
 
   class CLI
     def self.run(arguments, output: $stdout, error: $stderr, client: nil)
-      options = { hours: 7.0, include_weekends: false, dry_run: false, holiday_regions: holiday_regions_from_environment }
+      options = { hours: 7.0, dry_run: false, holiday_regions: holiday_regions_from_environment }
       parser = option_parser(options)
       dates = parser.parse(arguments)
       validate!(dates, options)
 
       from = Date.iso8601(dates[0])
       to = Date.iso8601(dates[1])
-      workdays = HarvestTimeOff.dates_between(
-        from,
-        to,
-        include_weekends: options[:include_weekends],
-        holiday_regions: options[:holiday_regions]
-      )
+      workdays = HarvestTimeOff.dates_between(from, to, holiday_regions: options[:holiday_regions])
       raise Error, "date range contains no days to enter" if workdays.empty?
 
       if options[:dry_run]
@@ -90,7 +82,6 @@ module HarvestTimeOff
         opts.on("--hours HOURS", Float, "Hours per day (default: 7)") { |value| options[:hours] = value }
         opts.on("--notes NOTES", "Optional note on every entry") { |value| options[:notes] = value }
         opts.on("--holiday-region REGION", "Holidays region; repeat for each locality") { |value| options[:holiday_regions] << value.strip.downcase }
-        opts.on("--include-weekends", "Create Saturday and Sunday entries too") { options[:include_weekends] = true }
         opts.on("--dry-run", "Print entries without calling Harvest") { options[:dry_run] = true }
         opts.on("-h", "--help", "Show this help") do
           puts opts
@@ -113,7 +104,7 @@ module HarvestTimeOff
     end
 
     def self.holiday_regions_from_environment
-      ENV.fetch("HARVEST_HOLIDAY_REGIONS", "").split(",").map { |region| region.strip.downcase }.reject(&:empty?)
+      ENV.fetch("HARVEST_HOLIDAY_REGIONS", "ca_yt").split(",").map { |region| region.strip.downcase }.reject(&:empty?)
     end
 
     def self.resolve_assignment(client, project_name, task_name)
