@@ -4,7 +4,6 @@ require "date"
 require "minitest/autorun"
 require "stringio"
 
-$LOAD_PATH.unshift File.expand_path("../harvest-api-v2/lib", __dir__)
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 require "harvest_time_off"
 
