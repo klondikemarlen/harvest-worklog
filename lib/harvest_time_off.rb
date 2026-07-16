@@ -109,7 +109,7 @@ module HarvestTimeOff
 
     def self.resolve_assignment(client, project_name, task_name)
       # ponytail: one 2,000-item page covers personal assignments; follow cursor pagination if that ceiling is exceeded.
-      matches = client.active_task_assignments.select do |assignment|
+      matches = client.active_personal_task_assignments.select do |assignment|
         assignment.dig("project", "name")&.casecmp?(project_name) &&
           assignment.dig("task", "name")&.casecmp?(task_name)
       end
