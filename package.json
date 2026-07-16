@@ -1,6 +1,6 @@
 {
   "name": "harvest-time-off",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Harvest time-off CLI and OMP tool.",
   "type": "module",
   "license": "MIT",

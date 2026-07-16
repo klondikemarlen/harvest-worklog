@@ -67,6 +67,7 @@ class HarvestTimeOffTest < Minitest::Test
     assert_equal 0, status
     assert_equal "", error.string
     assert_equal 2, client.entries.length
+    assert_equal :personal, client.assignment_source
     assert_equal(
       [
         { project_id: 48_730_683, task_id: 8_083_365, spent_date: Date.new(2026, 7, 17), hours: 7.5, notes: "Vacation" },
@@ -126,7 +127,7 @@ class HarvestTimeOffTest < Minitest::Test
   end
 
   class FakeClient
-    attr_reader :entries, :requests
+    attr_reader :assignment_source, :entries, :requests
 
     def initialize(existing_entries: [])
       @entries = []
@@ -134,7 +135,8 @@ class HarvestTimeOffTest < Minitest::Test
       @requests = []
     end
 
-    def active_task_assignments
+    def active_personal_task_assignments
+      @assignment_source = :personal
       [{ "project" => { "id" => 48_730_683, "name" => "Time Off - Marlen" }, "task" => { "id" => 8_083_365, "name" => "Vacation / PTO" } }]
     end
 

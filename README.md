@@ -31,7 +31,7 @@ harvest-time-off 2026-08-17 2026-08-28 \
 
 The default holiday region is `ca_yt`. Add `--holiday-region REGION` or set `HARVEST_HOLIDAY_REGIONS` to include other [Holidays](https://github.com/holidays/holidays) regions. `business_time` calculates business days and `holidays` supplies observed statutory holidays.
 
-A time-off block never creates weekend entries. The underlying [`marlens-harvest-api-v2`](https://github.com/klondikemarlen/harvest-api-v2) client accepts any ISO date, including weekends, for ordinary work entries.
+A time-off block never creates weekend entries. When names are supplied, it resolves them from your active personal Harvest assignments, so a Project Manager role is not required. The underlying [`marlens-harvest-api-v2`](https://github.com/klondikemarlen/harvest-api-v2) client accepts any ISO date, including weekends, for ordinary work entries.
 
 ## OMP settings
 
