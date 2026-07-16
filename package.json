@@ -1,6 +1,6 @@
 {
   "name": "harvest-time-off",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Harvest time-off CLI and OMP tool.",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,17 @@
       "./index.js"
     ],
     "settings": {
+      "defaultHours": {
+        "type": "number",
+        "default": 7,
+        "min": 0.01,
+        "description": "Hours per business day when the Harvest tool call omits hours."
+      },
+      "holidayRegions": {
+        "type": "string",
+        "default": "ca_yt",
+        "description": "Comma-separated Holidays regions; defaults to Yukon, Canada."
+      },
       "command": {
         "type": "string",
         "default": "harvest-time-off",

@@ -13,8 +13,13 @@ class HarvestTimeOffTest < Minitest::Test
     from = Date.new(2026, 7, 17)
     to = Date.new(2026, 7, 20)
 
-    assert_equal [Date.new(2026, 7, 17), Date.new(2026, 7, 20)], HarvestTimeOff.dates_between(from, to)
-    assert_equal (from..to).to_a, HarvestTimeOff.dates_between(from, to, include_weekends: true)
+    assert_equal [Date.new(2026, 7, 17), Date.new(2026, 7, 20)], HarvestTimeOff.dates_between(from, to, holiday_regions: ["ca"])
+  end
+
+  def test_dates_between_excludes_observed_regional_holidays
+    dates = HarvestTimeOff.dates_between(Date.new(2007, 7, 2), Date.new(2007, 7, 6), holiday_regions: ["ca_bc"])
+
+    assert_equal [Date.new(2007, 7, 3), Date.new(2007, 7, 4), Date.new(2007, 7, 5), Date.new(2007, 7, 6)], dates
   end
 
   def test_dry_run_accepts_hours_notes_and_named_assignment
@@ -22,7 +27,7 @@ class HarvestTimeOffTest < Minitest::Test
     error = StringIO.new
 
     status = HarvestTimeOff::CLI.run(
-      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7.5", "--notes", "Vacation", "--dry-run"],
+      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--notes", "Vacation", "--holiday-region", "ca", "--dry-run"],
       output:,
       error:
     )
@@ -30,9 +35,23 @@ class HarvestTimeOffTest < Minitest::Test
     assert_equal 0, status
     assert_equal "", error.string
     assert_equal 2, output.string.lines.length
-    assert_includes output.string, "2026-07-17: 7.5h on Time Off - Marlen / Vacation / PTO; Vacation"
-    assert_includes output.string, "2026-07-20: 7.5h on Time Off - Marlen / Vacation / PTO; Vacation"
+    assert_includes output.string, "2026-07-17: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
+    assert_includes output.string, "2026-07-20: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
   end
+
+  def test_cli_defaults_to_yukon_holidays
+    output = StringIO.new
+
+    status = HarvestTimeOff::CLI.run(
+      ["2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--dry-run"],
+      output:
+    )
+
+    assert_equal 0, status
+    assert_equal 9, output.string.lines.length
+    refute_includes output.string, "2026-08-17"
+  end
+
 
   def test_command_resolves_assignment_and_creates_one_entry_per_workday
     client = FakeClient.new
@@ -40,7 +59,7 @@ class HarvestTimeOffTest < Minitest::Test
     error = StringIO.new
 
     status = HarvestTimeOff::CLI.run(
-      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7.5", "--notes", "Vacation"],
+      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7.5", "--notes", "Vacation", "--holiday-region", "ca"],
       output:,
       error:,
       client:

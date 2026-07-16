@@ -5,14 +5,13 @@ export function timeOffArguments({
   to,
   project,
   task,
-  hours = 8,
+  hours,
   notes,
-  includeWeekends = false,
   dryRun = false,
-}) {
-  const args = [from, to, "--project", project, "--task", task, "--hours", String(hours)]
+}, { defaultHours = 7, holidayRegions = [] } = {}) {
+  const args = [from, to, "--project", project, "--task", task, "--hours", String(hours ?? defaultHours)]
+  for (const region of holidayRegions) args.push("--holiday-region", region)
   if (notes) args.push("--notes", notes)
-  if (includeWeekends) args.push("--include-weekends")
   if (dryRun) args.push("--dry-run")
   return args
 }
@@ -39,11 +38,11 @@ export function runCommand(command, args, { cwd, signal } = {}) {
   })
 }
 
-export function createTimeOffTool(z, { command = "harvest-time-off", run = runCommand } = {}) {
+export function createTimeOffTool(z, { command = "harvest-time-off", defaultHours = 7, holidayRegions = "", run = runCommand } = {}) {
   return {
     name: "harvest_time_off",
     label: "Harvest Time Off",
-    description: "Create one Harvest duration time entry for each weekday in an inclusive date range. Verify the project, task, dates, hours, and optional note before calling; this mutates Harvest.",
+    description: "Create one Harvest duration entry for each local business day in an inclusive date range. Verify the project, task, dates, configured holiday region, hours, and optional note before calling; this mutates Harvest.",
     approval: "write",
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
@@ -52,11 +51,10 @@ export function createTimeOffTool(z, { command = "harvest-time-off", run = runCo
       task: z.string().min(1),
       hours: z.number().positive().finite().optional(),
       notes: z.string().min(1).optional(),
-      includeWeekends: z.boolean().optional(),
       dryRun: z.boolean().optional(),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      const args = timeOffArguments(params)
+      const args = timeOffArguments(params, { defaultHours, holidayRegions: holidayRegions.split(",").map(region => region.trim()).filter(Boolean) })
       onUpdate?.({ content: [{ type: "text", text: "Creating Harvest time entries…" }] })
       const result = await run(command, args, { cwd: ctx.cwd, signal })
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
@@ -78,5 +76,9 @@ export function createTimeOffTool(z, { command = "harvest-time-off", run = runCo
 
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Time")
-  pi.registerTool(createTimeOffTool(pi.zod.z, { command: options.command }))
+  pi.registerTool(createTimeOffTool(pi.zod.z, {
+    command: options.command,
+    defaultHours: options.defaultHours,
+    holidayRegions: options.holidayRegions,
+  }))
 }

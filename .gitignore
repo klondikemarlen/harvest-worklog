@@ -1,3 +1,4 @@
 .env
+.envrc
 *.gem
 node_modules

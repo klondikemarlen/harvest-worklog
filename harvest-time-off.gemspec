@@ -14,10 +14,12 @@ Gem::Specification.new do |spec|
 
   spec.metadata["source_code_uri"] = spec.homepage
 
-  spec.files = Dir["lib/**/*.rb", "bin/*", "harvest-time-off.rb"]
+  spec.files = Dir["lib/**/*.rb", "bin/*", "harvest-time-off.rb", "README.md"]
   spec.bindir = "bin"
   spec.executables = ["harvest-time-off"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "harvest-api-v2", "~> 0.1"
+  spec.add_dependency "business_time", "~> 0.13"
+  spec.add_dependency "holidays", "~> 9.2"
 end
