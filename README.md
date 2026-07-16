@@ -31,7 +31,7 @@ harvest-time-off 2026-08-17 2026-08-28 \
 
 The default holiday region is `ca_yt`. Add `--holiday-region REGION` or set `HARVEST_HOLIDAY_REGIONS` to include other [Holidays](https://github.com/holidays/holidays) regions. `business_time` calculates business days and `holidays` supplies observed statutory holidays.
 
-A time-off block never creates weekend entries. The underlying [`harvest-api-v2`](https://github.com/klondikemarlen/harvest-api-v2) client accepts any ISO date, including weekends, for ordinary work entries.
+A time-off block never creates weekend entries. The underlying [`marlens-harvest-api-v2`](https://github.com/klondikemarlen/harvest-api-v2) client accepts any ISO date, including weekends, for ordinary work entries.
 
 ## OMP settings
 
@@ -45,7 +45,7 @@ A time-off block never creates weekend entries. The underlying [`harvest-api-v2`
 
 ## Release
 
-Before merging a release PR, self-review its complete diff, address every actionable review comment, and rerun focused QA after fixups. Record the review and QA evidence on the PR. Then merge to `main`, build and publish the Ruby gem when its `harvest-api-v2` dependency is available on RubyGems, install the released OMP plugin from GitHub, and verify it:
+Before merging a release PR, self-review its complete diff, address every actionable review comment, and rerun focused QA after fixups. Record the review and QA evidence on the PR. Then merge to `main`, build and publish the Ruby gem when its `marlens-harvest-api-v2` dependency is available on RubyGems, install the released OMP plugin from GitHub, and verify it:
 
 ```bash
 ruby test_harvest_time_off.rb

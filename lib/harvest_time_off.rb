@@ -5,7 +5,7 @@ require "business_time"
 require "date"
 require "holidays"
 require "optparse"
-require "harvest_api_v2"
+require "marlens/harvest_api_v2"
 
 module HarvestTimeOff
   module_function
@@ -43,7 +43,7 @@ module HarvestTimeOff
         return 0
       end
 
-      client ||= HarvestApiV2::Client.from_environment
+      client ||= Marlens::HarvestApiV2::Client.from_environment
       project_id, task_id = if options[:project_id]
                               [options[:project_id], options[:task_id]]
                             else
@@ -61,7 +61,7 @@ module HarvestTimeOff
         output.puts "Created #{date.iso8601}: #{HarvestTimeOff.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
       end
       0
-    rescue Error, HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
+    rescue Error, Marlens::HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
       error.puts "Error: #{e.message}"
       error.puts parser if parser
       1
