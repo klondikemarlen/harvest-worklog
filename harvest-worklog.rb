@@ -2,6 +2,6 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
-require "harvest_time_off"
+require "harvest_worklog"
 
-exit HarvestTimeOff::CLI.run(ARGV)
+exit HarvestWorklog::CLI.run(ARGV)

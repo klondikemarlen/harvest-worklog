@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module HarvestTimeOff
+module HarvestWorklog
   class WorkEntryCLI
     EXISTING_ENTRY = 2
     LOCKED_ENTRY = 3
@@ -16,7 +16,7 @@ module HarvestTimeOff
       project_id, task_id = if options[:project_id]
                               [options[:project_id], options[:task_id]]
                             else
-                              CLI.resolve_assignment(client, options[:project], options[:task])
+                              TimeOffCLI.resolve_assignment(client, options[:project], options[:task])
                             end
       existing_entries = client.request(
         :get,
@@ -35,7 +35,7 @@ module HarvestTimeOff
       end
 
       if options[:dry_run]
-        output.puts "Would create #{spent_date.iso8601}: #{HarvestTimeOff.display_hours(options[:hours])}h on #{options[:project]} / #{options[:task]}; #{options[:notes]}"
+        output.puts "Would create #{spent_date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h on #{options[:project]} / #{options[:task]}; #{options[:notes]}"
         return 0
       end
 
@@ -46,7 +46,7 @@ module HarvestTimeOff
         hours: options[:hours],
         notes: options[:notes]
       )
-      output.puts "Created #{spent_date.iso8601}: #{HarvestTimeOff.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
+      output.puts "Created #{spent_date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
       0
     rescue Error, Marlens::HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
       error.puts "Error: #{e.message}"
@@ -56,7 +56,7 @@ module HarvestTimeOff
 
     def self.option_parser(options)
       OptionParser.new do |opts|
-        opts.banner = "Usage: harvest-work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [--dry-run]"
+        opts.banner = "Usage: harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [--dry-run]"
         opts.on("--project NAME", "Harvest project name") { |value| options[:project] = value }
         opts.on("--task NAME", "Harvest task name") { |value| options[:task] = value }
         opts.on("--project-id ID", Integer, "Harvest project ID") { |value| options[:project_id] = value }

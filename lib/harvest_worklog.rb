@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "harvest_time_off/version"
+require "harvest_worklog/version"
 require "business_time"
 require "date"
 require "holidays"
 require "optparse"
 require "marlens/harvest_api_v2"
 
-module HarvestTimeOff
+module HarvestWorklog
   module_function
 
   def dates_between(from, to, holiday_regions:)
@@ -28,6 +28,37 @@ module HarvestTimeOff
 
   class CLI
     def self.run(arguments, output: $stdout, error: $stderr, client: nil)
+      command, *command_arguments = arguments
+      case command
+      when "time-off"
+        TimeOffCLI.run(command_arguments, output:, error:, client:)
+      when "work-entry"
+        WorkEntryCLI.run(command_arguments, output:, error:, client:)
+      when "-h", "--help"
+        output.puts usage
+        0
+      else
+        error.puts "Error: choose time-off or work-entry"
+        error.puts usage
+        1
+      end
+    end
+
+    def self.usage
+      <<~USAGE
+        Usage:
+          harvest-worklog time-off FROM TO --project NAME --task NAME [options]
+          harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
+
+        Commands:
+          time-off    Create one entry per local business day in a date range.
+          work-entry  Create one reviewed ordinary-work entry.
+      USAGE
+    end
+  end
+
+  class TimeOffCLI
+    def self.run(arguments, output: $stdout, error: $stderr, client: nil)
       options = { hours: 7.0, dry_run: false, holiday_regions: holiday_regions_from_environment }
       parser = option_parser(options)
       dates = parser.parse(arguments)
@@ -35,7 +66,7 @@ module HarvestTimeOff
 
       from = Date.iso8601(dates[0])
       to = Date.iso8601(dates[1])
-      workdays = HarvestTimeOff.dates_between(from, to, holiday_regions: options[:holiday_regions])
+      workdays = HarvestWorklog.dates_between(from, to, holiday_regions: options[:holiday_regions])
       raise Error, "date range contains no days to enter" if workdays.empty?
 
       if options[:dry_run]
@@ -58,7 +89,7 @@ module HarvestTimeOff
           hours: options[:hours],
           notes: options[:notes]
         )
-        output.puts "Created #{date.iso8601}: #{HarvestTimeOff.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
+        output.puts "Created #{date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
       end
       0
     rescue Error, Marlens::HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
@@ -70,8 +101,8 @@ module HarvestTimeOff
     def self.option_parser(options)
       OptionParser.new do |opts|
         opts.banner = <<~USAGE
-          Usage: harvest-time-off FROM TO --project NAME --task NAME [options]
-                 harvest-time-off FROM TO --project-id ID --task-id ID [options]
+          Usage: harvest-worklog time-off FROM TO --project NAME --task NAME [options]
+                 harvest-worklog time-off FROM TO --project-id ID --task-id ID [options]
 
           Creates one Harvest duration entry for each local business day from FROM through TO.
         USAGE
@@ -127,10 +158,10 @@ module HarvestTimeOff
       task = options[:task] || "task ##{options[:task_id]}"
       notes = options[:notes] ? "; #{options[:notes]}" : ""
       dates.each do |date|
-        output.puts "Would create #{date.iso8601}: #{HarvestTimeOff.display_hours(options[:hours])}h on #{project} / #{task}#{notes}"
+        output.puts "Would create #{date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h on #{project} / #{task}#{notes}"
       end
     end
   end
 end
 
-require "harvest_time_off/work_entry_cli"
+require "harvest_worklog/work_entry_cli"

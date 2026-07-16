@@ -29,7 +29,7 @@ test("builds a safe CLI argument vector", () => {
       dryRun: true,
     }),
     [
-      "2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
+      "time-off", "2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
       "--hours", "7.5", "--notes", "Vacation", "--dry-run",
     ],
   )
@@ -38,7 +38,7 @@ test("builds a safe CLI argument vector", () => {
 test("registers an approval-gated OMP write tool", async () => {
   const calls = []
   const tool = createTimeOffTool(z, {
-    command: "harvest-time-off",
+    command: "harvest-worklog",
     run: async (...args) => {
       calls.push(args)
       return { code: 0, stdout: "Created 2026-07-17", stderr: "" }
@@ -55,8 +55,8 @@ test("registers an approval-gated OMP write tool", async () => {
 
   assert.equal(tool.approval, "write")
   assert.deepEqual(calls, [[
-    "harvest-time-off",
-    ["2026-07-17", "2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7"],
+    "harvest-worklog",
+    ["time-off", "2026-07-17", "2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7"],
     { cwd: "/tmp", signal: undefined },
   ]])
   assert.equal(result.content[0].text, "Created 2026-07-17")
@@ -82,7 +82,7 @@ test("uses configured default hours and holiday regions", async () => {
   )
 
   assert.deepEqual(calls[0][1], [
-    "2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
+    "time-off", "2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
     "--hours", "6.5", "--holiday-region", "ca_yt", "--holiday-region", "ca",
   ])
 })

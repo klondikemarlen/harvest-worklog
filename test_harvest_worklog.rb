@@ -5,18 +5,18 @@ require "minitest/autorun"
 require "stringio"
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
-require "harvest_time_off"
+require "harvest_worklog"
 
-class HarvestTimeOffTest < Minitest::Test
+class HarvestWorklogTest < Minitest::Test
   def test_dates_between_skips_weekends_by_default
     from = Date.new(2026, 7, 17)
     to = Date.new(2026, 7, 20)
 
-    assert_equal [Date.new(2026, 7, 17), Date.new(2026, 7, 20)], HarvestTimeOff.dates_between(from, to, holiday_regions: ["ca"])
+    assert_equal [Date.new(2026, 7, 17), Date.new(2026, 7, 20)], HarvestWorklog.dates_between(from, to, holiday_regions: ["ca"])
   end
 
   def test_dates_between_excludes_observed_regional_holidays
-    dates = HarvestTimeOff.dates_between(Date.new(2007, 7, 2), Date.new(2007, 7, 6), holiday_regions: ["ca_bc"])
+    dates = HarvestWorklog.dates_between(Date.new(2007, 7, 2), Date.new(2007, 7, 6), holiday_regions: ["ca_bc"])
 
     assert_equal [Date.new(2007, 7, 3), Date.new(2007, 7, 4), Date.new(2007, 7, 5), Date.new(2007, 7, 6)], dates
   end
@@ -25,8 +25,8 @@ class HarvestTimeOffTest < Minitest::Test
     output = StringIO.new
     error = StringIO.new
 
-    status = HarvestTimeOff::CLI.run(
-      ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--notes", "Vacation", "--holiday-region", "ca", "--dry-run"],
+    status = HarvestWorklog::CLI.run(
+      ["time-off", "2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--notes", "Vacation", "--holiday-region", "ca", "--dry-run"],
       output:,
       error:
     )
@@ -41,7 +41,7 @@ class HarvestTimeOffTest < Minitest::Test
   def test_cli_defaults_to_yukon_holidays
     output = StringIO.new
 
-    status = HarvestTimeOff::CLI.run(
+    status = HarvestWorklog::TimeOffCLI.run(
       ["2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--dry-run"],
       output:
     )
@@ -57,7 +57,7 @@ class HarvestTimeOffTest < Minitest::Test
     output = StringIO.new
     error = StringIO.new
 
-    status = HarvestTimeOff::CLI.run(
+    status = HarvestWorklog::TimeOffCLI.run(
       ["2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "7.5", "--notes", "Vacation", "--holiday-region", "ca"],
       output:,
       error:,
@@ -83,8 +83,8 @@ class HarvestTimeOffTest < Minitest::Test
     output = StringIO.new
     error = StringIO.new
 
-    status = HarvestTimeOff::WorkEntryCLI.run(
-      ["2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "2.25", "--notes", "OMP Project Time: Harvest API", "--dry-run"],
+    status = HarvestWorklog::CLI.run(
+      ["work-entry", "2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "2.25", "--notes", "OMP Project Time: Harvest API", "--dry-run"],
       output:,
       error:,
       client:
@@ -100,13 +100,13 @@ class HarvestTimeOffTest < Minitest::Test
     client = FakeClient.new(existing_entries: [{ "is_locked" => true }])
     output = StringIO.new
 
-    status = HarvestTimeOff::WorkEntryCLI.run(
+    status = HarvestWorklog::WorkEntryCLI.run(
       ["2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "2.25", "--notes", "OMP Project Time: Harvest API"],
       output:,
       client:
     )
 
-    assert_equal HarvestTimeOff::WorkEntryCLI::LOCKED_ENTRY, status
+    assert_equal HarvestWorklog::WorkEntryCLI::LOCKED_ENTRY, status
     assert_equal "Locked existing Harvest entry on 2026-07-17; skipped\n", output.string
     assert_empty client.entries
   end
@@ -115,13 +115,13 @@ class HarvestTimeOffTest < Minitest::Test
     client = FakeClient.new(existing_entries: [{ "is_locked" => false }])
     output = StringIO.new
 
-    status = HarvestTimeOff::WorkEntryCLI.run(
+    status = HarvestWorklog::WorkEntryCLI.run(
       ["2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO", "--hours", "2.25", "--notes", "OMP Project Time: Harvest API"],
       output:,
       client:
     )
 
-    assert_equal HarvestTimeOff::WorkEntryCLI::EXISTING_ENTRY, status
+    assert_equal HarvestWorklog::WorkEntryCLI::EXISTING_ENTRY, status
     assert_equal "Existing Harvest entry on 2026-07-17; skipped\n", output.string
     assert_empty client.entries
   end

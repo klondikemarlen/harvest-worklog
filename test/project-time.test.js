@@ -45,7 +45,7 @@ test("maps and splits Project Time sessions by local Harvest date", () => {
 test("previews mapped Project Time entries without writing", async () => {
   const calls = []
   const preview = createProjectTimeTool(z, {
-    command: "harvest-work-entry",
+    command: "harvest-worklog",
     projectTimeMappings: JSON.stringify({
       "Harvest API": { project: "Internal", task: "Development" },
     }),
@@ -63,8 +63,8 @@ test("previews mapped Project Time entries without writing", async () => {
 
   assert.equal(preview.approval, "read")
   assert.deepEqual(calls, [[
-    "harvest-work-entry",
-    ["2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)", "--dry-run"],
+    "harvest-worklog",
+    ["work-entry", "2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)", "--dry-run"],
     { cwd: "/tmp", signal: undefined },
   ]])
   assert.match(result.content[0].text, /Would create 2026-07-17/)
@@ -74,6 +74,6 @@ test("previews mapped Project Time entries without writing", async () => {
   assert.equal(record.approval, "write")
   assert.deepEqual(
     workEntryArguments({ spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 1.25, notes: "OMP Project Time: Harvest API (repo)" }, false),
-    ["2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)"],
+    ["work-entry", "2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)"],
   )
 })
