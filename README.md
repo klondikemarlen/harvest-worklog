@@ -22,6 +22,7 @@ Personal Access Tokens are the intended Harvest authentication method for person
 ```text
 harvest-worklog time-off FROM TO --project NAME --task NAME [options]
 harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
+harvest-worklog aggregate FROM TO [--project NAME] [--task NAME]
 ```
 
 ### Time off
@@ -43,6 +44,18 @@ A time-off block never creates weekend entries. When names are supplied, it reso
 ### Reviewed ordinary work
 
 The `work-entry` command checks for existing or locked entries for its project, task, and date before creating a new duration entry. Use `--dry-run` to complete that preflight without a write. OMP Project Time uses the same path.
+
+### Read-only aggregates
+
+The `aggregate` command reads all matching Harvest time-entry pages and prints totals grouped by spent date and project/task. It lists every date in the inclusive range, including weekend or empty dates, and never writes a Harvest record.
+
+```bash
+harvest-worklog aggregate 2026-07-17 2026-07-19 \
+  --project WRAP \
+  --task Programming
+```
+
+The `harvest_time_aggregates` OMP tool exposes the same optional filters and is approval-gated as a read.
 
 ## OMP settings
 
@@ -80,8 +93,11 @@ harvest-worklog time-off 2026-08-17 2026-08-28 \
   --task 'Vacation / PTO' \
   --holiday-region ca_yt \
   --dry-run
+VERSION="$(ruby -Ilib -rharvest_worklog/version -e 'puts HarvestWorklog::VERSION')"
 gem build harvest-worklog.gemspec
-gem push harvest-worklog-<version>.gem
+gem push "harvest-worklog-${VERSION}.gem"
+gem uninstall harvest-time-off --all --executables --ignore-dependencies
+gem install --clear-sources --source https://rubygems.org harvest-worklog --version "$VERSION" --no-document
 omp plugin uninstall harvest-time-off
 omp plugin install --force github:klondikemarlen/harvest-worklog
 omp plugin list
