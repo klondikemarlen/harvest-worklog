@@ -45,9 +45,16 @@ A time-off block never creates weekend entries. The underlying [`harvest-api-v2`
 
 ## Release
 
-After a reviewed merge to `main`, build and publish the Ruby gem when its `harvest-api-v2` dependency is available on RubyGems. Then install the released OMP plugin from GitHub and verify it before calling the release complete:
+Before merging a release PR, self-review its complete diff, address every actionable review comment, and rerun focused QA after fixups. Record the review and QA evidence on the PR. Then merge to `main`, build and publish the Ruby gem when its `harvest-api-v2` dependency is available on RubyGems, install the released OMP plugin from GitHub, and verify it:
 
 ```bash
+ruby test_harvest_time_off.rb
+npm run test:omp
+harvest-time-off 2026-08-17 2026-08-28 \
+  --project 'Time Off - Marlen' \
+  --task 'Vacation / PTO' \
+  --holiday-region ca_yt \
+  --dry-run
 gem build harvest-time-off.gemspec
 gem push harvest-time-off-<version>.gem
 omp plugin install --force github:klondikemarlen/harvest-time-off
