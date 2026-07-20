@@ -8,7 +8,7 @@ module HarvestWorklog
       options = {}
       parser = option_parser(options)
       dates = parser.parse(arguments)
-      validate!(dates)
+      validate!(dates, options)
 
       from = Date.iso8601(dates[0])
       to = Date.iso8601(dates[1])
@@ -36,8 +36,10 @@ module HarvestWorklog
       end
     end
 
-    def self.validate!(dates)
+    def self.validate!(dates, options = {})
       raise Error, "FROM and TO are required" unless dates.length == 2
+      raise Error, "--project must not be blank" if options[:project]&.strip&.empty?
+      raise Error, "--task must not be blank" if options[:task]&.strip&.empty?
     end
 
     def self.fetch_entries(client, from:, to:, user_id: nil)

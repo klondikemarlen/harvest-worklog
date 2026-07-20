@@ -7,6 +7,7 @@ import { parseProjectTimeMappings, projectTimeEntries, projectTimeTransform } fr
 const schema = () => ({
   regex() { return this },
   min() { return this },
+  trim() { return this },
   positive() { return this },
   finite() { return this },
   optional() { return this },

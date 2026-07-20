@@ -52,7 +52,9 @@ module HarvestWorklog
       <<~USAGE
         Usage:
           harvest-worklog time-off FROM TO --project NAME --task NAME [options]
+          harvest-worklog time-off FROM TO --project-id ID --task-id ID [options]
           harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
+          harvest-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
           harvest-worklog aggregate FROM TO [--project NAME] [--task NAME]
           harvest-worklog timesheet DATE --project NAME [--task NAME]
 
@@ -70,6 +72,7 @@ module HarvestWorklog
       options = { hours: 7.0, dry_run: false, holiday_regions: holiday_regions_from_environment }
       parser = option_parser(options)
       dates = parser.parse(arguments)
+      normalize_holiday_regions!(options[:holiday_regions])
       validate!(dates, options)
 
       from = Date.iso8601(dates[0])
@@ -133,17 +136,25 @@ module HarvestWorklog
       raise Error, "FROM and TO are required" unless dates.length == 2
       raise Error, "--hours must be a positive finite number" unless options[:hours].positive? && options[:hours].finite?
       raise Error, "--holiday-region or HARVEST_HOLIDAY_REGIONS is required" if options[:holiday_regions].empty?
+      raise Error, "--notes must not be blank" if options[:notes]&.strip&.empty?
 
       names_provided = options[:project] || options[:task]
       ids_provided = options[:project_id] || options[:task_id]
-      valid_names = options[:project] && options[:task]
-      valid_ids = options[:project_id] && options[:task_id]
+      valid_names = options[:project] && !options[:project].strip.empty? && options[:task] && !options[:task].strip.empty?
+      valid_ids = options[:project_id]&.positive? && options[:task_id]&.positive?
       raise Error, "supply --project and --task, or --project-id and --task-id" unless valid_names || valid_ids
       raise Error, "do not combine project/task names with IDs" if names_provided && ids_provided
     end
 
     def self.holiday_regions_from_environment
       ENV.fetch("HARVEST_HOLIDAY_REGIONS", "ca_yt").split(",").map { |region| region.strip.downcase }.reject(&:empty?)
+    end
+
+    def self.normalize_holiday_regions!(regions)
+      regions.map! { |region| region.strip.downcase }
+      regions.reject!(&:empty?)
+      regions.uniq!
+      regions
     end
 
     def self.resolve_assignment(client, project_name, task_name)

@@ -8,6 +8,14 @@ $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 require "harvest_worklog"
 
 class HarvestWorklogTest < Minitest::Test
+  def test_global_help_lists_name_and_id_assignment_forms
+    output = StringIO.new
+
+    assert_equal 0, HarvestWorklog::CLI.run(["--help"], output:)
+    assert_includes output.string, "time-off FROM TO --project-id ID --task-id ID"
+    assert_includes output.string, "work-entry DATE --project-id ID --task-id ID"
+  end
+
   def test_dates_between_skips_weekends_by_default
     from = Date.new(2026, 7, 17)
     to = Date.new(2026, 7, 20)
@@ -19,6 +27,72 @@ class HarvestWorklogTest < Minitest::Test
     dates = HarvestWorklog.dates_between(Date.new(2007, 7, 2), Date.new(2007, 7, 6), holiday_regions: ["ca_bc"])
 
     assert_equal [Date.new(2007, 7, 3), Date.new(2007, 7, 4), Date.new(2007, 7, 5), Date.new(2007, 7, 6)], dates
+  end
+
+  def test_time_off_rejects_blank_names_and_nonpositive_ids
+    empty_name_error = StringIO.new
+    blank_notes_error = StringIO.new
+    invalid_id_error = StringIO.new
+
+    assert_equal 1, HarvestWorklog::TimeOffCLI.run(
+      ["2026-07-17", "2026-07-17", "--project", " ", "--task", "Vacation", "--dry-run"],
+      error: empty_name_error
+    )
+    assert_includes empty_name_error.string, "supply --project and --task"
+    assert_equal 1, HarvestWorklog::TimeOffCLI.run(
+      ["2026-07-17", "2026-07-17", "--project", "PTO", "--task", "Vacation", "--notes", " ", "--dry-run"],
+      error: blank_notes_error
+    )
+    assert_includes blank_notes_error.string, "--notes must not be blank"
+    assert_equal 1, HarvestWorklog::TimeOffCLI.run(
+      ["2026-07-17", "2026-07-17", "--project-id", "0", "--task-id", "-1", "--dry-run"],
+      error: invalid_id_error
+    )
+    assert_includes invalid_id_error.string, "supply --project and --task"
+  end
+
+  def test_work_entry_rejects_blank_names_notes_and_nonpositive_ids
+    empty_name_error = StringIO.new
+    blank_notes_error = StringIO.new
+    invalid_id_error = StringIO.new
+
+    assert_equal 1, HarvestWorklog::WorkEntryCLI.run(
+      ["2026-07-17", "--project", " ", "--task", "Programming", "--hours", "1", "--notes", "Work", "--dry-run"],
+      error: empty_name_error
+    )
+    assert_includes empty_name_error.string, "supply --project and --task"
+    assert_equal 1, HarvestWorklog::WorkEntryCLI.run(
+      ["2026-07-17", "--project", "WRAP", "--task", "Programming", "--hours", "1", "--notes", " ", "--dry-run"],
+      error: blank_notes_error
+    )
+    assert_includes blank_notes_error.string, "--notes is required"
+    assert_equal 1, HarvestWorklog::WorkEntryCLI.run(
+      ["2026-07-17", "--project-id", "0", "--task-id", "-1", "--hours", "1", "--notes", "Work", "--dry-run"],
+      error: invalid_id_error
+    )
+    assert_includes invalid_id_error.string, "supply --project and --task"
+  end
+
+  def test_read_commands_reject_blank_filters
+    aggregate_error = StringIO.new
+    timesheet_project_error = StringIO.new
+    timesheet_task_error = StringIO.new
+
+    assert_equal 1, HarvestWorklog::AggregateCLI.run(
+      ["2026-07-17", "2026-07-17", "--project", " "],
+      error: aggregate_error
+    )
+    assert_includes aggregate_error.string, "--project must not be blank"
+    assert_equal 1, HarvestWorklog::TimesheetCLI.run(
+      ["today", "--project", " "],
+      error: timesheet_project_error
+    )
+    assert_includes timesheet_project_error.string, "--project is required"
+    assert_equal 1, HarvestWorklog::TimesheetCLI.run(
+      ["today", "--project", "WRAP", "--task", " "],
+      error: timesheet_task_error
+    )
+    assert_includes timesheet_task_error.string, "--task must not be blank"
   end
 
   def test_dry_run_accepts_hours_notes_and_named_assignment
@@ -36,6 +110,18 @@ class HarvestWorklogTest < Minitest::Test
     assert_equal 2, output.string.lines.length
     assert_includes output.string, "2026-07-17: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
     assert_includes output.string, "2026-07-20: 7h on Time Off - Marlen / Vacation / PTO; Vacation"
+  end
+
+  def test_time_off_normalizes_regions_and_rejects_whitespace_only_values
+    options = { holiday_regions: ["ca_yt"] }
+    HarvestWorklog::TimeOffCLI.option_parser(options).parse(["--holiday-region", "CA_YT", "--holiday-region", " "])
+    assert_equal ["ca_yt"], HarvestWorklog::TimeOffCLI.normalize_holiday_regions!(options[:holiday_regions])
+
+    empty_options = { holiday_regions: [], hours: 7.0, project: "PTO", task: "Vacation" }
+    HarvestWorklog::TimeOffCLI.option_parser(empty_options).parse(["--holiday-region", " "])
+    HarvestWorklog::TimeOffCLI.normalize_holiday_regions!(empty_options[:holiday_regions])
+    error = assert_raises(HarvestWorklog::Error) { HarvestWorklog::TimeOffCLI.validate!(["2026-07-17", "2026-07-17"], empty_options) }
+    assert_equal "--holiday-region or HARVEST_HOLIDAY_REGIONS is required", error.message
   end
 
   def test_cli_defaults_to_yukon_holidays
@@ -94,6 +180,21 @@ class HarvestWorklogTest < Minitest::Test
     assert_equal "", error.string
     assert_includes output.string, "Would create 2026-07-17: 2.25h"
     assert_equal [{ method: :get, path: "/v2/time_entries", params: { project_id: 48_730_683, task_id: 8_083_365, from: "2026-07-17", to: "2026-07-17" } }], client.requests
+  end
+
+  def test_work_entry_id_preview_names_the_assignment
+    client = FakeClient.new
+    output = StringIO.new
+
+    status = HarvestWorklog::CLI.run(
+      ["work-entry", "2026-07-17", "--project-id", "123", "--task-id", "456", "--hours", "2.25", "--notes", "Reviewed work", "--dry-run"],
+      output:,
+      client:
+    )
+
+    assert_equal 0, status
+    assert_includes output.string, "Would create 2026-07-17: 2.25h on project #123 / task #456; Reviewed work"
+    assert_equal [{ method: :get, path: "/v2/time_entries", params: { project_id: 123, task_id: 456, from: "2026-07-17", to: "2026-07-17" } }], client.requests
   end
 
   def test_work_entry_skips_locked_existing_entry

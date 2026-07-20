@@ -46,7 +46,8 @@ module HarvestWorklog
 
     def self.validate!(dates, options)
       raise Error, "DATE is required" unless dates.length == 1
-      raise Error, "--project is required" unless options[:project] && !options[:project].empty?
+      raise Error, "--project is required" unless options[:project] && !options[:project].strip.empty?
+      raise Error, "--task must not be blank" if options[:task]&.strip&.empty?
     end
 
     def self.print_timesheet(output, entries, spent_date:, requested_project:)
