@@ -77,6 +77,26 @@ Configure `projectTimeMappings` with the recorded OMP Project Time project name 
 
 `harvest_preview_project_time_entries` reads the configured time log, splits sessions across local dates, generates descriptions from the project and repository, and checks Harvest for existing or locked entries without writing. `harvest_record_project_time_entries` performs the same preflight then creates only new entries; OMP treats it as a write requiring approval. Unmapped sessions are reported and never written.
 
+### Activity transforms
+
+`harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. Set `applyMappings` to include configured Harvest project/task mappings. The output reports `groups`, proposed mapped `entries`, and any `unmapped` or `excluded` rows.
+
+`harvest_record_project_time_transforms` is a separate approval-gated write step. It always applies configured mappings and records the reviewed activity entries through the existing locked and duplicate preflight. Different activity labels may share a date/project/task; rerunning the same activity label is skipped, as are locked or unrelated existing entries.
+
+## Reconciling WRAP hours with manual entries
+
+Use a closed date range and record the expected OMP Project Time and manually entered hours for each day. Preview OMP entries first, then compare the final Harvest total for each day:
+
+```bash
+harvest-worklog aggregate FROM TO \
+  --project WRAP \
+  --task Programming
+```
+
+OMP-created entries use an `OMP Project Time:` note; use a `Manual reconciliation:` note for manual entries while testing. Inspect the Harvest entry details to distinguish their source—the aggregate intentionally combines all matching entries.
+
+The standard work-entry importer allows only one entry for a date, project, and task. If a manual `WRAP / Programming` entry exists for a date, importing ordinary OMP Project Time for that same mapping skips it rather than adding hours. Activity transforms are the exception: distinct activity labels can create separate entries while the same label, locked entries, and unrelated manual entries are still skipped. Reconcile ordinary entries as either OMP or manual hours, not their sum.
+
 ## Migration from harvest-time-off
 
 Version `0.5.0` is a clean identity cutover. Uninstall the prior `harvest-time-off` gem and OMP plugin, then install `harvest-worklog`; replace former top-level CLI commands with the `harvest-worklog time-off` and `harvest-worklog work-entry` subcommands. The old package, executables, and `workEntryCommand` setting are not retained.
