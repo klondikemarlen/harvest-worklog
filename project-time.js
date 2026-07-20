@@ -9,25 +9,30 @@ export function defaultProjectTimeLogPath() {
 }
 
 export function parseProjectTimeMappings(value) {
-  const mappings = typeof value === "string" ? JSON.parse(value || "{}") : value
+  const mappings = typeof value === "string" ? JSON.parse(value.trim() || "{}") : value
   if (typeof mappings !== "object" || mappings === null || Array.isArray(mappings)) {
     throw new Error("projectTimeMappings must be a JSON object")
   }
 
-  return new Map(Object.entries(mappings).map(([project, mapping]) => {
+  const result = new Map()
+  for (const [project, mapping] of Object.entries(mappings)) {
+    const normalizedProject = project.trim()
     if (
       typeof mapping !== "object" ||
       mapping === null ||
       Array.isArray(mapping) ||
+      normalizedProject.length === 0 ||
       typeof mapping.project !== "string" ||
-      mapping.project.length === 0 ||
+      mapping.project.trim().length === 0 ||
       typeof mapping.task !== "string" ||
-      mapping.task.length === 0
+      mapping.task.trim().length === 0
     ) {
       throw new Error(`projectTimeMappings.${project} requires project and task names`)
     }
-    return [project, mapping]
-  }))
+    if (result.has(normalizedProject)) throw new Error(`projectTimeMappings has duplicate project ${normalizedProject}`)
+    result.set(normalizedProject, { ...mapping, project: mapping.project.trim(), task: mapping.task.trim() })
+  }
+  return result
 }
 
 export function projectTimeEntries(state, mappings, { from, to }) {

@@ -5,6 +5,10 @@ function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
 }
 
+function normalizeCommand(command) {
+  return command?.trim() || "harvest-worklog"
+}
+
 export function timeOffArguments({
   from,
   to,
@@ -89,6 +93,8 @@ export function createProjectTimeTool(
   } = {},
   { dryRun },
 ) {
+  command = normalizeCommand(command)
+  projectTimeLogPath = projectTimeLogPath.trim()
   const operation = dryRun ? "Preview" : "Record"
   return {
     name: dryRun ? "harvest_preview_project_time_entries" : "harvest_record_project_time_entries",
@@ -152,6 +158,8 @@ export function createProjectTimeTransformTool(
   } = {},
   { record },
 ) {
+  command = normalizeCommand(command)
+  projectTimeLogPath = projectTimeLogPath.trim()
   const operation = record ? "Record" : "Preview"
   const parameters = {
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
@@ -212,6 +220,7 @@ export function createProjectTimeTransformTool(
 }
 
 export function createTimeAggregateTool(z, { command = "harvest-worklog", run = runCommand } = {}) {
+  command = normalizeCommand(command)
   return {
     name: "harvest_time_aggregates",
     label: "View Harvest Time Aggregates",
@@ -245,6 +254,7 @@ export function createTimeAggregateTool(z, { command = "harvest-worklog", run = 
 }
 
 export function createTimesheetTool(z, { command = "harvest-worklog", run = runCommand } = {}) {
+  command = normalizeCommand(command)
   return {
     name: "harvest_time_sheet",
     label: "View Daily Harvest Timesheet",
@@ -283,6 +293,7 @@ function hasValidAssignment({ project, task, projectId, taskId }) {
 }
 
 export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours = 7, holidayRegions = "ca_yt", run = runCommand } = {}) {
+  command = normalizeCommand(command)
   const configuredHolidayRegions = normalizeHolidayRegions(holidayRegions.split(","))
   return {
     name: "harvest_record_time_off",
@@ -467,8 +478,10 @@ export function parseHarvestWorklogArguments(args) {
 
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Worklog")
-  const command = options.command ?? "harvest-worklog"
+  const command = normalizeCommand(options.command)
   const run = options.run ?? runCommand
+  const projectTimeMappings = options.projectTimeMappings?.trim() || "{}"
+  const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   pi.registerCommand("harvest-worklog", {
     description: "Show one project's daily Harvest timesheet",
     getArgumentCompletions: harvestWorklogArgumentCompletions,
@@ -489,31 +502,31 @@ export default function harvestTimeExtension(pi, options = {}) {
       pi.sendMessage({ customType: "harvest-worklog-timesheet", content: output, display: true, attribution: "assistant" }, { triggerTurn: false })
     },
   })
-  pi.registerTool(createTimeAggregateTool(pi.zod.z, { command: options.command }))
+  pi.registerTool(createTimeAggregateTool(pi.zod.z, { command }))
   pi.registerTool(createTimesheetTool(pi.zod.z, { command, run }))
   pi.registerTool(createTimeOffTool(pi.zod.z, {
-    command: options.command,
+    command,
     defaultHours: options.defaultHours,
     holidayRegions: options.holidayRegions,
   }))
   pi.registerTool(createProjectTimeTool(pi.zod.z, {
-    command: options.command,
-    projectTimeMappings: options.projectTimeMappings,
-    projectTimeLogPath: options.projectTimeLogPath,
+    command,
+    projectTimeMappings,
+    projectTimeLogPath,
   }, { dryRun: true }))
   pi.registerTool(createProjectTimeTool(pi.zod.z, {
-    command: options.command,
-    projectTimeMappings: options.projectTimeMappings,
-    projectTimeLogPath: options.projectTimeLogPath,
+    command,
+    projectTimeMappings,
+    projectTimeLogPath,
   }, { dryRun: false }))
   pi.registerTool(createProjectTimeTransformTool(pi.zod.z, {
-    command: options.command,
-    projectTimeMappings: options.projectTimeMappings,
-    projectTimeLogPath: options.projectTimeLogPath,
+    command,
+    projectTimeMappings,
+    projectTimeLogPath,
   }, { record: false }))
   pi.registerTool(createProjectTimeTransformTool(pi.zod.z, {
-    command: options.command,
-    projectTimeMappings: options.projectTimeMappings,
-    projectTimeLogPath: options.projectTimeLogPath,
+    command,
+    projectTimeMappings,
+    projectTimeLogPath,
   }, { record: true }))
 }

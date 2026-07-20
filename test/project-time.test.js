@@ -19,6 +19,25 @@ const z = {
   object: shape => shape,
 }
 
+test("normalizes and validates Project Time mapping settings", () => {
+  assert.deepEqual([...parseProjectTimeMappings(" ")], [])
+  assert.deepEqual(
+    [...parseProjectTimeMappings({ " Harvest API ": { project: " Internal ", task: " Development " } })],
+    [["Harvest API", { project: "Internal", task: "Development" }]],
+  )
+  assert.throws(
+    () => parseProjectTimeMappings({ "Harvest API": { project: " ", task: "Development" } }),
+    /requires project and task names/,
+  )
+  assert.throws(
+    () => parseProjectTimeMappings({
+      "Harvest API": { project: "Internal", task: "Development" },
+      " Harvest API ": { project: "Other", task: "Development" },
+    }),
+    /duplicate project Harvest API/,
+  )
+})
+
 test("maps and splits Project Time sessions by local Harvest date", () => {
   const mappings = parseProjectTimeMappings(JSON.stringify({
     "Harvest API": { project: "Internal", task: "Development" },
@@ -45,15 +64,20 @@ test("maps and splits Project Time sessions by local Harvest date", () => {
 
 test("previews mapped Project Time entries without writing", async () => {
   const calls = []
+  const loads = []
   const preview = createProjectTimeTool(z, {
-    command: "harvest-worklog",
+    command: " ",
     projectTimeMappings: JSON.stringify({
       "Harvest API": { project: "Internal", task: "Development" },
     }),
-    loadEntries: async () => ({
-      entries: [{ spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 1.25, notes: "OMP Project Time: Harvest API (repo)" }],
-      unmapped: 1,
-    }),
+    projectTimeLogPath: " ",
+    loadEntries: async options => {
+      loads.push(options)
+      return {
+        entries: [{ spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 1.25, notes: "OMP Project Time: Harvest API (repo)" }],
+        unmapped: 1,
+      }
+    },
     run: async (...args) => {
       calls.push(args)
       return { code: 0, stdout: "Would create 2026-07-17", stderr: "" }
@@ -62,6 +86,7 @@ test("previews mapped Project Time entries without writing", async () => {
 
   const result = await preview.execute("call-1", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
 
+  assert.equal(loads[0].logPath, undefined)
   assert.equal(preview.approval, "read")
   assert.deepEqual(calls, [[
     "harvest-worklog",

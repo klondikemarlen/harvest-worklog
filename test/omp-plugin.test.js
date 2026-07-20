@@ -256,6 +256,9 @@ test("registers autocomplete and delegates slash commands to the CLI", async () 
     registerCommand(name, command) { commands.push({ name, command }) },
     sendMessage(message, options) { messages.push({ message, options }) },
   }, {
+    command: " ",
+    projectTimeMappings: " ",
+    projectTimeLogPath: " ",
     run: async (...args) => {
       calls.push(args)
       return { code: 0, stdout: "CLI output", stderr: "" }
