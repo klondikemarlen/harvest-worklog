@@ -70,8 +70,8 @@ The CLI `timesheet` command and `harvest_time_sheet` OMP tool read the authentic
 harvest-worklog timesheet today --project WRAP
 ```
 
-The `/harvest-worklog timesheet today --project wrap` slash command instead reads a Monday–Sunday local OMP Project Time week. It presents daily `Human active` totals in a Harvest-like row and expands the requested day with separate `Human active` and `Agent elapsed` totals. It does not call Harvest, upload entries, or require `projectTimeMappings`; mappings remain specific to previewing or recording Harvest entries.
-`/project-time history` reports all logged dates, so its totals can be larger than the displayed week.
+The `/harvest-worklog timesheet today --project wrap` slash command reads only the requested local OMP Project Time day. It shows the configured Harvest project and task when `projectTimeMappings` contains `wrap`, then lists distinct `Human active` activities as notes; without a mapping, it shows the local project and an `Activities` heading. It does not call Harvest or upload entries.
+`/project-time history` reports all logged dates, so its totals can be larger than the selected day.
 
 Type `/harvest-worklog ` in OMP to discover `timesheet`, then select `today`, `yesterday`, or an ISO date before the contextual `--project` option. The editable project name must exactly match the case-sensitive local Project Time name.
 
