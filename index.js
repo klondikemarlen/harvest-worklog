@@ -300,27 +300,239 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
   }
 }
 
+const HARVEST_WORKLOG_USAGE = [
+  "Usage:",
+  "  /harvest-worklog DATE PROJECT [--task TASK]",
+  "  /harvest-worklog COMMAND [CLI OPTIONS]",
+  "",
+  "Commands: timesheet, aggregate, time-off, work-entry",
+  "DATE: today, yesterday, or YYYY-MM-DD",
+].join("\n")
+
+const DATE_COMPLETIONS = [
+  { label: "today", value: "today", description: "Local date alias; YYYY-MM-DD is also accepted" },
+  { label: "yesterday", value: "yesterday", description: "Previous local date; YYYY-MM-DD is also accepted" },
+]
+
+function dateCompletions(command) {
+  if (command === "timesheet") return DATE_COMPLETIONS
+  const now = new Date()
+  const value = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map(part => String(part).padStart(2, "0")).join("-")
+  return [{ label: "YYYY-MM-DD", value, description: "Today's local ISO date; edit as needed" }]
+}
+
+const COMMAND_COMPLETIONS = {
+  timesheet: {
+    description: "Read one project's personal daily timesheet",
+    dates: 1,
+    flags: {
+      "--project": "Exact Harvest project name",
+      "--help": "Show timesheet CLI help",
+      "--task": "Optional exact Harvest task name",
+    },
+  },
+  aggregate: {
+    description: "Read Harvest totals for an inclusive date range",
+    dates: 2,
+    flags: {
+      "--project": "Optional exact Harvest project name",
+      "--help": "Show aggregate CLI help",
+      "--task": "Optional exact Harvest task name",
+    },
+  },
+  "time-off": {
+    description: "Record holiday-aware time-off entries",
+    dates: 2,
+    flags: {
+      "--project": "Harvest project name",
+      "--task": "Harvest task name",
+      "--project-id": "Harvest project ID",
+      "--task-id": "Harvest task ID",
+      "--hours": "Hours per business day",
+      "--notes": "Entry notes",
+      "--holiday-region": "Holidays region code",
+      "--help": "Show time-off CLI help",
+      "--dry-run": "Preview without writing",
+    },
+  },
+  "work-entry": {
+    description: "Record one reviewed work entry",
+    dates: 1,
+    flags: {
+      "--project": "Harvest project name",
+      "--task": "Harvest task name",
+      "--project-id": "Harvest project ID",
+      "--task-id": "Harvest task ID",
+      "--hours": "Entry hours",
+      "--notes": "Entry notes",
+      "--dry-run": "Preview without writing",
+      "--activity-entry": "Allow distinct Project Time activity entries",
+      "--help": "Show work-entry CLI help",
+    },
+  },
+}
+
+const BOOLEAN_FLAGS = new Set(["--dry-run", "--activity-entry"])
+const REPEATABLE_FLAGS = new Set(["--holiday-region"])
+
+export function harvestWorklogArgumentCompletions(argumentPrefix) {
+  const input = argumentPrefix
+  const trimmed = input.trim()
+
+  if (!trimmed || !input.includes(" ")) {
+    const choices = [
+      ...Object.entries(COMMAND_COMPLETIONS).map(([value, command]) => ({ label: value, value, description: command.description })),
+      ...DATE_COMPLETIONS,
+      { label: "help", value: "help", description: "Show command forms and date options" },
+    ]
+    return choices.filter(choice => choice.value.startsWith(trimmed.toLowerCase()))
+  }
+
+  const first = trimmed.split(/\s+/, 1)[0].toLowerCase()
+  const command = COMMAND_COMPLETIONS[first]
+  if (!command) {
+    if (!/^(today|yesterday|\d{4}-\d{2}-\d{2})$/i.test(first) || trimmed.includes("--task")) return null
+    const compactFlag = completionForFlag(input, { "--task": "Optional exact Harvest task name" })
+    return trimmed.split(/\s+/).length > 1 ? compactFlag : null
+  }
+
+  const words = trimmed.split(/\s+/)
+  const optionIndex = words.findIndex((word, index) => index > 0 && word.startsWith("--"))
+  const positionals = words.slice(1, optionIndex === -1 ? words.length : optionIndex)
+  if (optionIndex === -1 && (positionals.length < command.dates || (!input.endsWith(" ") && positionals.length === command.dates))) {
+    const partial = input.endsWith(" ") ? "" : positionals.at(-1) ?? ""
+    const base = [first, ...positionals.slice(0, input.endsWith(" ") ? positionals.length : -1)]
+    return dateCompletions(first)
+      .filter(choice => choice.value.startsWith(partial.toLowerCase()) || choice.label.startsWith(partial.toUpperCase()))
+      .map(choice => ({ ...choice, value: [...base, choice.value].join(" ") }))
+  }
+
+  return completionForFlag(input, command.flags, first)
+}
+
+function completionForFlag(input, flags, commandName) {
+  const trimmed = input.trim()
+  const words = trimmed.split(/\s+/)
+  const current = input.endsWith(" ") ? "" : words.at(-1)
+  const previous = input.endsWith(" ") ? words.at(-1) : words.at(-2)
+  if (!current && previous?.startsWith("--") && !BOOLEAN_FLAGS.has(previous)) return null
+  if (current && !current.startsWith("--")) return null
+
+  const available = availableFlags(commandName, words, flags)
+
+  const base = current ? trimmed.slice(0, -current.length).trimEnd() : trimmed
+  const choices = Object.entries(available)
+    .filter(([flag]) => (!words.includes(flag) || REPEATABLE_FLAGS.has(flag)) && (!current || flag.startsWith(current)))
+    .map(([flag, description]) => ({ label: flag, value: `${base} ${flag}`.trim(), description }))
+  return choices.length > 0 ? choices : null
+}
+
+function availableFlags(commandName, words, flags) {
+  if (commandName === "timesheet") {
+    if (!words.includes("--project")) return { "--project": flags["--project"], "--help": flags["--help"] }
+    return hasFlagValue(words, "--project") ? { "--task": flags["--task"], "--help": flags["--help"] } : { "--help": flags["--help"] }
+  }
+
+  if (["time-off", "work-entry"].includes(commandName)) {
+    const names = words.includes("--project") || words.includes("--task")
+    const ids = words.includes("--project-id") || words.includes("--task-id")
+    return Object.fromEntries(Object.entries(flags).filter(([flag]) => {
+      if (names && ["--project-id", "--task-id"].includes(flag)) return false
+      if (ids && ["--project", "--task"].includes(flag)) return false
+      if (flag === "--task") return hasFlagValue(words, "--project")
+      if (flag === "--task-id") return hasFlagValue(words, "--project-id")
+      return true
+    }))
+  }
+
+  return flags
+}
+
+function hasFlagValue(words, flag) {
+  const index = words.indexOf(flag)
+  return index >= 0 && Boolean(words[index + 1]) && !words[index + 1].startsWith("--")
+}
+
+export function parseCommandArguments(input) {
+  const words = []
+  let word = ""
+  let quote = null
+  let started = false
+  let escaped = false
+
+  for (const character of input.trim()) {
+    if (escaped) {
+      word += character
+      started = true
+      escaped = false
+    } else if (character === "\\" && quote !== "'") {
+      escaped = true
+    } else if (quote) {
+      if (character === quote) quote = null
+      else word += character
+    } else if (character === "'" || character === "\"") {
+      quote = character
+      started = true
+    } else if (/\s/.test(character)) {
+      if (started) {
+        words.push(word)
+        word = ""
+        started = false
+      }
+    } else {
+      word += character
+      started = true
+    }
+  }
+
+  if (quote || escaped) return null
+  if (started) words.push(word)
+  return words
+}
+
+export function parseHarvestWorklogArguments(args) {
+  const input = args.trim()
+  if (input === "help") return { help: true }
+
+  const words = parseCommandArguments(input)
+  if (!words || words.length === 0) return null
+  if (COMMAND_COMPLETIONS[words[0]]) return { argv: words }
+
+  const taskIndex = words.indexOf("--task")
+  if (taskIndex !== -1 && (taskIndex < 2 || taskIndex === words.length - 1 || words.indexOf("--task", taskIndex + 1) !== -1)) return null
+  const project = words.slice(1, taskIndex === -1 ? words.length : taskIndex).join(" ")
+  if (!project) return null
+  const task = taskIndex === -1 ? undefined : words.slice(taskIndex + 1).join(" ")
+  return { argv: timesheetArguments({ date: words[0], project, task }) }
+}
+
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Worklog")
   const command = options.command ?? "harvest-worklog"
   const run = options.run ?? runCommand
   pi.registerCommand("harvest-worklog", {
-    description: "Show one project's daily Harvest timesheet: /harvest-worklog DATE PROJECT",
+    description: "Run Harvest Worklog CLI commands with contextual options",
+    getArgumentCompletions: harvestWorklogArgumentCompletions,
     handler: async (args, ctx) => {
-      const match = args.trim().match(/^(\S+)\s+(.+)$/)
-      if (!match) {
-        ctx.ui.notify("Usage: /harvest-worklog DATE PROJECT", "error")
+      const parsed = parseHarvestWorklogArguments(args)
+      if (!parsed || parsed.help) {
+        ctx.ui.notify(HARVEST_WORKLOG_USAGE, parsed?.help ? "info" : "error")
         return
       }
 
-      const result = await run(command, timesheetArguments({ date: match[1], project: match[2] }), { cwd: ctx.cwd })
+      if (["time-off", "work-entry"].includes(parsed.argv[0]) && !parsed.argv.some(argument => ["--dry-run", "--help", "-h"].includes(argument))) {
+        const confirmed = await ctx.ui.confirm("Write to Harvest?", `${command} ${parsed.argv.join(" ")}`)
+        if (!confirmed) return
+      }
+
+      const result = await run(command, parsed.argv, { cwd: ctx.cwd })
       if (result.spawnError) {
         ctx.ui.notify(`Could not run ${command}: ${result.spawnError.message}`, "error")
         return
       }
 
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim() || `${command} exited with ${result.code}`
-      pi.sendMessage({ customType: "harvest-worklog-timesheet", content: output, display: true, attribution: "assistant" }, { triggerTurn: false })
+      pi.sendMessage({ customType: "harvest-worklog-cli", content: output, display: true, attribution: "assistant" }, { triggerTurn: false })
     },
   })
   pi.registerTool(createTimeAggregateTool(pi.zod.z, { command: options.command }))

@@ -68,6 +68,8 @@ harvest-worklog timesheet today --project WRAP
 
 OMP exposes the same CLI-only path through `/harvest-worklog today WRAP` and the read-only `harvest_time_sheet` tool. The wrapper never calls Harvest directly. A later, separate feature may upload reviewed content through the Harvest API; keep that write path separate from this read-only formatter.
 
+Type `/harvest-worklog ` in OMP to discover the CLI subcommands, relative date tokens, and context-valid options. Completion keeps project/task names and other option values as editable text, and the slash command delegates the selected argument vector to the CLI.
+
 ## OMP settings
 
 - `defaultHours`: hours per business day when a time-off tool call omits `hours`; defaults to `7`.
