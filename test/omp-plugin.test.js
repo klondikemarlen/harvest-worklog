@@ -263,8 +263,9 @@ test("registers autocomplete and reads local Project Time for slash timesheets",
       loads.push(options)
       return {
         groups: [
-          { sourceKind: "human_active", milliseconds: 24_040_000 },
-          { sourceKind: "agent_turn_elapsed", milliseconds: 1_789_000 },
+          { spentDate: "2026-07-20", sourceKind: "human_active", milliseconds: 24_040_000 },
+          { spentDate: "2026-07-20", sourceKind: "agent_turn_elapsed", milliseconds: 1_789_000 },
+          { spentDate: "2026-07-21", sourceKind: "human_active", milliseconds: 7_200_000 },
         ],
       }
     },
@@ -287,14 +288,13 @@ test("registers autocomplete and reads local Project Time for slash timesheets",
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui })
   assert.deepEqual(loads, [{
     from: "2026-07-20",
-    to: "2026-07-20",
+    to: "2026-07-26",
     project: "wrap",
     mappings: new Map(),
     logPath: "/tmp/project-time.json",
   }])
   assert.equal(calls.length, 0)
-  assert.equal(messages[0].message.customType, "harvest-worklog-timesheet")
-  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20\n\nHuman active · 6h 40m 40s\nAgent elapsed · 29m 49s")
+  assert.equal(messages[0].message.content, "wrap · Week of Mon, Jul 20–Sun, Jul 26\n\nMon 6:40 · Tue 2:00 · Wed 0:00 · Thu 0:00 · Fri 0:00 · Sat 0:00 · Sun 0:00\n\nMon, Jul 20\nHuman active · 6h 40m 40s\nAgent elapsed · 29m 49s")
 
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 0)
