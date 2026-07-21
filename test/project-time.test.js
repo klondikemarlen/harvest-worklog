@@ -74,6 +74,26 @@ test("renders synthetic narrative worklog fixtures", () => {
   }
 })
 
+test("keeps future narrative fixture expectations explicit", () => {
+  const scenarios = Object.fromEntries(narrativeFixtures.scenarios.map(scenario => [scenario.id, scenario]))
+
+  assert.deepEqual(
+    scenarios["multi-topic-programming"].expectedNarrativesForFutureSchema,
+    [
+      "Implemented validation for a configurable workflow and covered invalid-state errors.",
+      "Built an approval panel and simplified the supporting form flow.",
+      "Fixed flaky integration checks and documented a deployment safeguard.",
+    ],
+  )
+  assert.deepEqual(
+    scenarios["deduplicate-identical-narrative"].expectedNarrativesForFutureSchema,
+    ["Generated: Investigated and stabilized an intermittent integration check."],
+  )
+  assert.deepEqual(scenarios["mixed-task-day"].expectedTaskGroups, ["Meeting", "Programming"])
+  assert.equal(scenarios["generic-activity-fallback"].groups[0].activity, "unlabelled")
+  assert.equal(scenarios["missing-activity-fallback"].groups[0].activity, "")
+})
+
 test("maps and splits Project Time sessions by local Harvest date", () => {
   const mappings = parseProjectTimeMappings(JSON.stringify({
     "Harvest API": { project: "Internal", task: "Development" },
