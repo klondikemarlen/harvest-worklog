@@ -49,6 +49,9 @@
       }
     }
   },
+  "dependencies": {
+    "@oh-my-pi/pi-ai": "^17.0.1"
+  },
   "engines": {
     "node": ">=20"
   }
