@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 
 import { createProjectTimeTool, createProjectTimeTransformTool, workEntryArguments } from "../index.js"
-import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const narrativeFixtures = JSON.parse(await readFile(new URL("./fixtures/narrative-worklog-scenarios.json", import.meta.url), "utf8"))
 
@@ -61,6 +61,29 @@ test("labels local activity data and separate Harvest destination", () => {
   assert.equal(
     formatProjectTimeTimesheet({ groups: [] }, { project: "WRAP", spentDate: "2026-07-20" }),
     "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\nNo local Project Time sessions found for WRAP on 2026-07-20.",
+  )
+})
+
+test("renders a generated worklog draft separately from local activity totals", () => {
+  assert.equal(
+    formatProjectTimeTimesheet(
+      { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build", milliseconds: 1_800_000 }] },
+      { project: "wrap", spentDate: "2026-07-20", summary: "- Implemented the selected local change." },
+    ),
+    "wrap · Mon, Jul 20 · 0:30\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\n- Build · 0:30\n\nWorklog draft (generated from local records)\n- Implemented the selected local change.",
+  )
+})
+
+test("keeps summary records within the requested repository", () => {
+  const state = {
+    entries: [
+      { sourceKind: "human_active", project: "wrap", repositoryId: "current", activity: "Included", startAtMs: new Date(2026, 6, 20, 9).getTime(), endAtMs: new Date(2026, 6, 20, 9, 30).getTime() },
+      { sourceKind: "human_active", project: "wrap", repositoryId: "other", activity: "Excluded", startAtMs: new Date(2026, 6, 20, 10).getTime(), endAtMs: new Date(2026, 6, 20, 10, 30).getTime() },
+    ],
+  }
+  assert.deepEqual(
+    projectTimeSummaryRecords(state, { from: "2026-07-20", to: "2026-07-20", project: "wrap", repositoryId: "current" }),
+    [{ activity: "Included", durationMilliseconds: 1_800_000 }],
   )
 })
 

@@ -253,9 +253,32 @@ export function projectTimeTransform(
   }
 }
 
+export function projectTimeSummaryRecords(state, { from, to, repositoryId, project }) {
+  const records = []
+  for (const session of state.entries) {
+    if (session.sourceKind !== "human_active" || session.project !== project || (repositoryId !== undefined && session.repositoryId !== repositoryId) || !Number.isFinite(session.startAtMs) || !Number.isFinite(session.endAtMs) || session.startAtMs >= session.endAtMs) continue
+
+    let cursor = session.startAtMs
+    while (cursor < session.endAtMs) {
+      const date = new Date(cursor)
+      const spentDate = localDate(date)
+      const segmentEnd = Math.min(session.endAtMs, new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime())
+      if (spentDate >= from && spentDate <= to) {
+        records.push({
+          activity: typeof session.activity === "string" && session.activity.length > 0 ? session.activity : "unlabelled",
+          durationMilliseconds: segmentEnd - cursor,
+          ...(typeof session.narrative?.text === "string" ? { narrative: session.narrative.text } : {}),
+        })
+      }
+      cursor = segmentEnd
+    }
+  }
+  return records
+}
+
 export async function loadProjectTimeTransform({ from, to, repositoryId, project, sourceKind, applyMappings, mappings, logPath = defaultProjectTimeLogPath(), read = readFile }) {
   const state = JSON.parse(await read(logPath, "utf8"))
-  return projectTimeTransform(state, mappings, { from, to, repositoryId, project, sourceKind, applyMappings })
+  return { ...projectTimeTransform(state, mappings, { from, to, repositoryId, project, sourceKind, applyMappings }), summaryRecords: projectTimeSummaryRecords(state, { from, to, repositoryId, project }) }
 }
 
 export function resolveProjectTimeDate(value, today = new Date()) {
@@ -276,7 +299,7 @@ export function resolveProjectTimeDate(value, today = new Date()) {
   }
   return value
 }
-export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping }) {
+export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, summary }) {
   const [year, month, day] = spentDate.split("-").map(Number)
   const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
   const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
@@ -305,6 +328,7 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping }
     task,
     ...visible.map(({ activity, milliseconds }) => `- ${activity} · ${formatDayTotal(milliseconds)}`),
     ...(hidden.length > 0 ? [`- ${remainder} · ${formatDayTotal(hidden.reduce((total, summary) => total + summary.milliseconds, 0))}`] : []),
+    ...(summary ? ["", "Worklog draft (generated from local records)", summary] : []),
   ].join("\n")
 }
 
