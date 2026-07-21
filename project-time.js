@@ -284,11 +284,28 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping }
     "Source: local OMP Project Time (not Harvest)",
     ...(mapping ? [`Harvest destination: ${mapping.project} / ${mapping.task}`] : []),
   ]
-  const task = "Activities"
-  const activities = [...new Set(groups.map(group => group.activity || "Unlabelled"))]
+  const activities = new Map()
+  for (const group of groups) {
+    const activity = group.activity || "Unlabelled"
+    const summary = activities.get(activity) ?? { activity, milliseconds: 0 }
+    summary.milliseconds += group.milliseconds
+    activities.set(activity, summary)
+  }
+  const summaries = [...activities.values()].sort((left, right) => right.milliseconds - left.milliseconds || left.activity.localeCompare(right.activity))
+  const visible = summaries.slice(0, 5)
+  const hidden = summaries.slice(5)
+  const task = "Activity summary"
 
-  if (activities.length === 0) return [heading, ...provenance, "", task, `No local Project Time sessions found for ${project} on ${spentDate}.`].join("\n")
-  return [heading, ...provenance, "", task, ...activities.map(activity => `- ${activity}`)].join("\n")
+  const remainder = hidden.length === 1 ? "1 other activity" : `${hidden.length} other activities`
+  if (summaries.length === 0) return [heading, ...provenance, "", task, `No local Project Time sessions found for ${project} on ${spentDate}.`].join("\n")
+  return [
+    heading,
+    ...provenance,
+    "",
+    task,
+    ...visible.map(({ activity, milliseconds }) => `- ${activity} · ${formatDayTotal(milliseconds)}`),
+    ...(hidden.length > 0 ? [`- ${remainder} · ${formatDayTotal(hidden.reduce((total, summary) => total + summary.milliseconds, 0))}`] : []),
+  ].join("\n")
 }
 
 function formatShortDate(date) {

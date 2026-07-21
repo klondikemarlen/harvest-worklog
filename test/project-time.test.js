@@ -53,14 +53,31 @@ test("labels local activity data and separate Harvest destination", () => {
 
   assert.equal(
     formatProjectTimeTimesheet(plan, { project: "wrap", spentDate: "2026-07-20", mapping: { project: "WRAP (YG - SIS)", task: "Programming" } }),
-    "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivities\n- Fix test suite\n- Prototype template v3 UI",
+    "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivity summary\n- Fix test suite · 6:40\n- Prototype template v3 UI · 0:05",
   )
   assert.equal(resolveProjectTimeDate("today", new Date(2026, 6, 20, 12)), "2026-07-20")
   assert.equal(resolveProjectTimeDate("yesterday", new Date(2026, 6, 20, 12)), "2026-07-19")
   assert.throws(() => resolveProjectTimeDate("2026-02-31"), /valid local date/)
   assert.equal(
     formatProjectTimeTimesheet({ groups: [] }, { project: "WRAP", spentDate: "2026-07-20" }),
-    "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivities\nNo local Project Time sessions found for WRAP on 2026-07-20.",
+    "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\nNo local Project Time sessions found for WRAP on 2026-07-20.",
+  )
+})
+
+test("summarizes local activities by duration and reports the omitted remainder", () => {
+  const groups = [
+    { activity: "Build", milliseconds: 1_200_000 },
+    { activity: "Build", milliseconds: 600_000 },
+    { activity: "Review", milliseconds: 900_000 },
+    { activity: "Test", milliseconds: 600_000 },
+    { activity: "Document", milliseconds: 300_000 },
+    { activity: "Release", milliseconds: 180_000 },
+    { activity: "Triage", milliseconds: 120_000 },
+  ].map(group => ({ ...group, spentDate: "2026-07-20", sourceKind: "human_active" }))
+
+  assert.equal(
+    formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20" }),
+    "wrap · Mon, Jul 20 · 1:05\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\n- Build · 0:30\n- Review · 0:15\n- Test · 0:10\n- Document · 0:05\n- Release · 0:03\n- 1 other activity · 0:02",
   )
 })
 

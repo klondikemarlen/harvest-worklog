@@ -320,7 +320,7 @@ test("renders local Project Time without calling Harvest", async () => {
     logPath: "/tmp/project-time.json",
   }])
   assert.equal(calls.length, 0)
-  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivities\n- Fix test suite\n- Prototype template v3 UI")
+  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivity summary\n- Fix test suite · 6:40\n- Prototype template v3 UI · 0:05")
 
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 0)

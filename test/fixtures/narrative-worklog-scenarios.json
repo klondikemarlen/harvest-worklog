@@ -12,7 +12,7 @@
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "Interface development", "description": "Built an approval panel and simplified the supporting form flow.", "milliseconds": 5400000, "provenance": "user" },
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "Regression testing", "description": "Fixed flaky integration checks and documented a deployment safeguard.", "milliseconds": 2700000, "provenance": "user" }
       ],
-      "expectedLegacy": "Example Systems · Tue, Mar 19 · 3:15\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivities\n- Configuration\n- Interface development\n- Regression testing",
+      "expectedLegacy": "Example Systems · Tue, Mar 19 · 3:15\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivity summary\n- Interface development · 1:30\n- Configuration · 1:00\n- Regression testing · 0:45",
       "expectedNarrativesForFutureSchema": ["Implemented validation for a configurable workflow and covered invalid-state errors.", "Built an approval panel and simplified the supporting form flow.", "Fixed flaky integration checks and documented a deployment safeguard."]
     },
     {
@@ -24,7 +24,7 @@
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "Regression testing", "description": "Investigated and stabilized an intermittent integration check.", "milliseconds": 1800000, "provenance": "generated" },
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "Regression testing", "description": "Investigated and stabilized an intermittent integration check.", "milliseconds": 1800000, "provenance": "generated" }
       ],
-      "expectedLegacy": "Example Systems · Tue, Mar 19 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivities\n- Regression testing",
+      "expectedLegacy": "Example Systems · Tue, Mar 19 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivity summary\n- Regression testing · 1:00",
       "expectedNarrativesForFutureSchema": ["Generated: Investigated and stabilized an intermittent integration check."]
     },
     {
@@ -36,7 +36,7 @@
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "Maintenance", "milliseconds": 900000, "provenance": "legacy" },
         { "spentDate": "2030-03-19", "sourceKind": "agent_turn_elapsed", "activity": "Maintenance", "description": "Generated text that must not appear in the worklog.", "milliseconds": 900000, "provenance": "generated" }
       ],
-      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivities\n- Maintenance",
+      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivity summary\n- Maintenance · 0:15",
       "expectedNarrativesForFutureSchema": ["Maintenance"]
     },
     {
@@ -47,7 +47,7 @@
       "groups": [
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "unlabelled", "milliseconds": 600000, "provenance": "legacy" }
       ],
-      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:10\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivities\n- unlabelled"
+      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:10\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivity summary\n- unlabelled · 0:10"
     },
     {
       "id": "missing-activity-fallback",
@@ -57,7 +57,7 @@
       "groups": [
         { "spentDate": "2030-03-19", "sourceKind": "human_active", "activity": "", "milliseconds": 300000, "provenance": "legacy" }
       ],
-      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:05\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivities\n- Unlabelled"
+      "expectedLegacy": "Example Systems · Tue, Mar 19 · 0:05\nSource: local OMP Project Time (not Harvest)\nHarvest destination: Example Systems / Programming\n\nActivity summary\n- Unlabelled · 0:05"
     },
     {
       "id": "mixed-task-day",
