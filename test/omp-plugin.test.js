@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import harvestTimeExtension, { aggregateArguments, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
+import harvestTimeExtension, { aggregateArguments, createProjectTimeMappingReviewTool, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
 
 const schema = () => ({
   regex() { return this },
@@ -118,6 +118,32 @@ test("registers a read-only daily timesheet wrapper", async () => {
     { cwd: "/tmp", signal: undefined },
   ]])
   assert.equal(result.content[0].text, "WRAP · Fri, Jul 17 · 7h")
+})
+
+test("reviews mapping candidates without writing Harvest or settings", async () => {
+  const calls = []
+  const tool = createProjectTimeMappingReviewTool(z, {
+    run: async (...args) => {
+      calls.push(args)
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          assignments: [{ project: { id: 1, name: "WRAP" }, task: { id: 2, name: "Programming" } }],
+          entries: [{ project: { id: 1, name: "WRAP" }, task: { id: 2, name: "Programming" }, hours: 2 }],
+        }),
+        stderr: "",
+      }
+    },
+    loadTransform: async () => ({
+      groups: [{ project: "wrap", repositoryId: "hashed", activity: "Implementation", sourceKind: "human_active", milliseconds: 7_200_000 }],
+    }),
+  })
+
+  const result = await tool.execute("review", { from: "2026-07-17", to: "2026-07-17", approvals: [{ sourceProject: "wrap", projectId: 1, taskId: 2 }] }, undefined, undefined, { cwd: "/tmp" })
+
+  assert.equal(tool.approval, "read")
+  assert.deepEqual(calls, [["harvest-worklog", ["mapping-data", "2026-07-17", "2026-07-17"], { cwd: "/tmp", signal: undefined }]])
+  assert.deepEqual(result.details.projectTimeMappings, { wrap: { project: "WRAP", task: "Programming" } })
 })
 
 test("registers an approval-gated OMP write tool", async () => {
@@ -309,6 +335,7 @@ test("registers autocomplete and reads local Project Time for slash timesheets",
       "harvest_record_project_time_entries",
       "harvest_preview_project_time_transforms",
       "harvest_record_project_time_transforms",
+      "harvest_review_project_time_mappings",
     ],
   )
 })

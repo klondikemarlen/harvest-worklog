@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { formatProjectTimeTimesheet, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, resolveProjectTimeDate } from "./project-time.js"
+import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, resolveProjectTimeDate } from "./project-time.js"
 
 function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
@@ -214,6 +214,43 @@ export function createProjectTimeTransformTool(
           content: [{ type: "text", text: JSON.stringify(output) }],
           details: output,
         }
+      }
+    },
+  }
+}
+
+export function createProjectTimeMappingReviewTool(z, { command = "harvest-worklog", projectTimeLogPath = "", run = runCommand, loadTransform = loadProjectTimeTransform } = {}) {
+  command = normalizeCommand(command)
+  projectTimeLogPath = projectTimeLogPath.trim()
+  return {
+    name: "harvest_review_project_time_mappings",
+    label: "Review Project Time mapping candidates",
+    description: "Read local human-active Project Time and Harvest assignments/history to produce reviewable mapping candidates. Approved candidates are returned as projectTimeMappings JSON; nothing is persisted or recorded.",
+    approval: "read",
+    parameters: z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+      approvals: z.array(z.object({
+        sourceProject: z.string().trim().min(1),
+        projectId: z.number().int().positive(),
+        taskId: z.number().int().positive(),
+      })).optional(),
+    }),
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      try {
+        onUpdate?.({ content: [{ type: "text", text: "Reading Project Time mapping candidates…" }] })
+        const [plan, result] = await Promise.all([
+          loadTransform({ from: params.from, to: params.to, mappings: new Map(), logPath: projectTimeLogPath || undefined }),
+          run(command, ["mapping-data", params.from, params.to], { cwd: ctx.cwd, signal }),
+        ])
+        if (result.spawnError) throw result.spawnError
+        if (result.code !== 0) throw new Error(result.stderr.trim() || `${command} exited with ${result.code}`)
+        const analysis = inferProjectTimeMappings(plan, JSON.parse(result.stdout))
+        const output = params.approvals ? { analysis, projectTimeMappings: approvedProjectTimeMappings(analysis, params.approvals) } : analysis
+        return { content: [{ type: "text", text: JSON.stringify(output) }], details: output }
+      } catch (error) {
+        const output = { error: error.message }
+        return { content: [{ type: "text", text: JSON.stringify(output) }], details: output }
       }
     },
   }
@@ -543,4 +580,8 @@ export default function harvestTimeExtension(pi, options = {}) {
     projectTimeMappings,
     projectTimeLogPath,
   }, { record: true }))
+  pi.registerTool(createProjectTimeMappingReviewTool(pi.zod.z, {
+    command,
+    projectTimeLogPath,
+  }))
 }

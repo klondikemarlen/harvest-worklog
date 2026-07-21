@@ -3,6 +3,7 @@
 require "harvest_worklog/version"
 require "business_time"
 require "date"
+require "json"
 require "holidays"
 require "optparse"
 require "marlens/harvest_api_v2"
@@ -38,11 +39,13 @@ module HarvestWorklog
         AggregateCLI.run(command_arguments, output:, error:, client:)
       when "timesheet"
         TimesheetCLI.run(command_arguments, output:, error:, client:)
+      when "mapping-data"
+        MappingDataCLI.run(command_arguments, output:, error:, client:)
       when "-h", "--help"
         output.puts usage
         0
       else
-        error.puts "Error: choose time-off, work-entry, aggregate, or timesheet"
+        error.puts "Error: choose time-off, work-entry, aggregate, timesheet, or mapping-data"
         error.puts usage
         1
       end
@@ -57,12 +60,14 @@ module HarvestWorklog
           harvest-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
           harvest-worklog aggregate FROM TO [--project NAME] [--task NAME]
           harvest-worklog timesheet DATE --project NAME [--task NAME]
+          harvest-worklog mapping-data FROM TO
 
         Commands:
           time-off    Create one entry per local business day in a date range.
           work-entry  Create one reviewed ordinary-work entry.
           aggregate   Read time-entry totals without writing Harvest records.
           timesheet  Read a compact daily project timesheet without writing Harvest records.
+          mapping-data Read assigned Harvest destinations and historical entries without writing.
       USAGE
     end
   end
@@ -186,3 +191,4 @@ end
 require "harvest_worklog/work_entry_cli"
 require "harvest_worklog/aggregate_cli"
 require "harvest_worklog/timesheet_cli"
+require "harvest_worklog/mapping_data_cli"

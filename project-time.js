@@ -35,6 +35,95 @@ export function parseProjectTimeMappings(value) {
   return result
 }
 
+export function inferProjectTimeMappings(plan, harvest) {
+  const assignments = harvest.assignments
+    .filter(assignment => Number.isInteger(assignment?.project?.id) && typeof assignment.project.name === "string" && Number.isInteger(assignment?.task?.id) && typeof assignment.task.name === "string")
+  const entries = harvest.entries.filter(entry => Number.isFinite(Number(entry.hours)))
+  const agentElapsedMs = plan.groups
+    .filter(group => group.sourceKind === "agent_turn_elapsed")
+    .reduce((total, group) => total + group.milliseconds, 0)
+  const sources = new Map()
+
+  for (const group of plan.groups.filter(group => group.sourceKind === "human_active")) {
+    if (typeof group.project !== "string" || group.project.trim().length === 0) continue
+    const sourceKey = normalizeMappingLabel(group.project)
+    const source = sources.get(sourceKey) ?? {
+      project: group.project,
+      repositoryIds: new Set(),
+      activities: new Set(),
+      milliseconds: 0,
+      projects: new Set(),
+    }
+    if (group.repositoryId) source.repositoryIds.add(group.repositoryId)
+    source.projects.add(group.project)
+    source.activities.add(group.activity)
+    source.milliseconds += group.milliseconds
+    sources.set(sourceKey, source)
+  }
+
+  return {
+    excluded: { sourceKind: "agent_turn_elapsed", hours: displayHours(agentElapsedMs) },
+    candidates: [...sources.values()].map(source => {
+      const projectAssignments = assignments.filter(assignment => normalizeMappingLabel(assignment.project.name) === normalizeMappingLabel(source.project))
+      const projectEntryCount = entries.filter(entry => projectAssignments.some(assignment => matchesHarvestAssignment(entry, assignment))).length
+      const candidates = projectAssignments.map(assignment => {
+        const historyCount = entries.filter(entry => matchesHarvestAssignment(entry, assignment)).length
+        const historyHours = entries
+          .filter(entry => matchesHarvestAssignment(entry, assignment))
+          .reduce((total, entry) => total + Number(entry.hours), 0)
+        const historyScore = projectEntryCount === 0 ? 0 : Math.round((historyCount / projectEntryCount) * 20)
+        return {
+          project: assignment.project,
+          task: assignment.task,
+          score: 100 + historyScore,
+          reasons: [
+            `Normalized local project ${JSON.stringify(source.project)} matches assigned Harvest project ${JSON.stringify(assignment.project.name)}.`,
+            ...(historyCount > 0 ? [`${historyCount} historical ${historyCount === 1 ? "entry" : "entries"} (${Math.round(historyHours * 100) / 100}h) for this project/task in the requested range.`] : []),
+          ],
+        }
+      }).sort((left, right) => right.score - left.score || left.project.name.localeCompare(right.project.name) || left.task.name.localeCompare(right.task.name) || left.task.id - right.task.id)
+      const status = candidates.length === 0 ? "unmatched" : candidates.length === 1 || candidates[0].score > candidates[1].score ? "suggested" : "ambiguous"
+
+      return {
+        source: {
+          project: source.project,
+          projects: [...source.projects].sort(),
+          repositoryIds: [...source.repositoryIds].sort(),
+          activities: [...source.activities].sort(),
+          hours: displayHours(source.milliseconds),
+        },
+        status,
+        candidates,
+      }
+    }).sort((left, right) => left.source.project.localeCompare(right.source.project)),
+  }
+
+}
+
+export function approvedProjectTimeMappings(analysis, approvals) {
+  const mappings = {}
+  const approvedSources = new Set()
+  for (const approval of approvals) {
+    const source = analysis.candidates.find(candidate => candidate.source.projects.includes(approval.sourceProject))
+    if (!source) throw new Error(`approval for ${approval.sourceProject} is not an analysed Harvest candidate`)
+    if (approvedSources.has(source.source.project)) throw new Error(`source project ${approval.sourceProject} was approved more than once`)
+    const candidate = source.candidates.find(candidate => candidate.project.id === approval.projectId && candidate.task.id === approval.taskId)
+    if (!candidate) throw new Error(`approval for ${approval.sourceProject} is not an analysed Harvest candidate`)
+    approvedSources.add(source.source.project)
+    for (const project of source.source.projects) mappings[project] = { project: candidate.project.name, task: candidate.task.name }
+  }
+  return mappings
+}
+
+function normalizeMappingLabel(value) {
+  return value.normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^\p{Letter}\p{Number}]+/gu, "")
+}
+
+
+function matchesHarvestAssignment(entry, assignment) {
+  return entry?.project?.id === assignment.project.id && entry?.task?.id === assignment.task.id
+}
+
 export function projectTimeEntries(state, mappings, { from, to }) {
   if (!state || !Array.isArray(state.entries)) {
     throw new Error("OMP Project Time log is missing an entries array")

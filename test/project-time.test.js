@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 
 import { createProjectTimeTool, createProjectTimeTransformTool, workEntryArguments } from "../index.js"
-import { formatProjectTimeTimesheet, parseProjectTimeMappings, projectTimeEntries, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const narrativeFixtures = JSON.parse(await readFile(new URL("./fixtures/narrative-worklog-scenarios.json", import.meta.url), "utf8"))
 
@@ -92,6 +92,63 @@ test("keeps future narrative fixture expectations explicit", () => {
   assert.deepEqual(scenarios["mixed-task-day"].expectedTaskGroups, ["Meeting", "Programming"])
   assert.equal(scenarios["generic-activity-fallback"].groups[0].activity, "unlabelled")
   assert.equal(scenarios["missing-activity-fallback"].groups[0].activity, "")
+})
+
+test("infers reviewed Harvest mapping candidates deterministically", () => {
+  const analysis = inferProjectTimeMappings(
+    {
+      groups: [
+        { project: " wrap ", repositoryId: "hashed-repository", activity: "Implementation", sourceKind: "human_active", milliseconds: 7_200_000 },
+        { project: "WRAP", repositoryId: "hashed-repository", activity: "Planning", sourceKind: "human_active", milliseconds: 3_600_000 },
+        { project: "wrap", repositoryId: "hashed-repository", activity: "Review", sourceKind: "agent_turn_elapsed", milliseconds: 3_600_000 },
+        { project: "Unknown", repositoryId: "other-repository", activity: "Research", sourceKind: "human_active", milliseconds: 1_800_000 },
+      ],
+    },
+    {
+      assignments: [
+        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" } },
+        { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Meeting" } },
+      ],
+      entries: [
+        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" }, hours: 8 },
+        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" }, hours: 2 },
+        { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Meeting" }, hours: 1.5 },
+      ],
+    },
+  )
+
+  assert.deepEqual(analysis.excluded, { sourceKind: "agent_turn_elapsed", hours: 1 })
+  const wrapCandidate = analysis.candidates.find(candidate => candidate.source.project === " wrap ")
+  assert.deepEqual(wrapCandidate.source, { project: " wrap ", projects: [" wrap ", "WRAP"], repositoryIds: ["hashed-repository"], activities: ["Implementation", "Planning"], hours: 3 })
+  assert.equal(wrapCandidate.status, "suggested")
+  assert.deepEqual(wrapCandidate.candidates[0], {
+    project: { id: 1, name: "WRAP" },
+    task: { id: 10, name: "Programming" },
+    score: 113,
+    reasons: [
+      "Normalized local project \" wrap \" matches assigned Harvest project \"WRAP\".",
+      "2 historical entries (10h) for this project/task in the requested range.",
+    ],
+  })
+  assert.deepEqual(approvedProjectTimeMappings(analysis, [{ sourceProject: "WRAP", projectId: 1, taskId: 10 }]), { " wrap ": { project: "WRAP", task: "Programming" }, WRAP: { project: "WRAP", task: "Programming" } })
+  assert.throws(() => approvedProjectTimeMappings(analysis, [
+    { sourceProject: "WRAP", projectId: 1, taskId: 10 },
+    { sourceProject: " wrap ", projectId: 1, taskId: 10 },
+  ]), /approved more than once/)
+  assert.deepEqual(approvedProjectTimeMappings(analysis, [{ sourceProject: " wrap ", projectId: 1, taskId: 10 }]), { " wrap ": { project: "WRAP", task: "Programming" }, WRAP: { project: "WRAP", task: "Programming" } })
+  assert.throws(() => approvedProjectTimeMappings(analysis, [{ sourceProject: "Unknown", projectId: 1, taskId: 10 }]), /not an analysed Harvest candidate/)
+})
+
+test("marks equally scored assigned tasks as ambiguous", () => {
+  const analysis = inferProjectTimeMappings(
+    { groups: [{ project: "WRAP", sourceKind: "human_active", activity: "Implementation", milliseconds: 3_600_000 }] },
+    { assignments: [
+      { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Programming" } },
+      { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Meeting" } },
+    ], entries: [] },
+  )
+  assert.equal(analysis.candidates[0].status, "ambiguous")
+  assert.deepEqual(analysis.candidates[0].candidates.map(candidate => candidate.task.name), ["Meeting", "Programming"])
 })
 
 test("maps and splits Project Time sessions by local Harvest date", () => {

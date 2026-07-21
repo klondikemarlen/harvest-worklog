@@ -2,6 +2,7 @@
 
 require "date"
 require "minitest/autorun"
+require "json"
 require "stringio"
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
@@ -274,6 +275,24 @@ class HarvestWorklogTest < Minitest::Test
     assert_equal ["OMP Project Time activity: \"implementation\"\nHarvest API (repo)", "OMP Project Time activity: \"review\"\nHarvest API (repo)"], client.entries.map { |entry| entry.fetch(:notes) }
   end
 
+  def test_mapping_data_cli_prints_assignments_and_historical_entries
+    output = StringIO.new
+    client = MappingDataClient.new(
+      [{ "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }],
+      [{ "spent_date" => "2026-07-17", "hours" => 2.5, "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }]
+    )
+
+    assert_equal 0, HarvestWorklog::CLI.run(["mapping-data", "2026-07-17", "2026-07-17"], output:, client:)
+    assert_equal(
+      {
+        "assignments" => [{ "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }],
+        "entries" => [{ "hours" => 2.5, "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }]
+      },
+      JSON.parse(output.string)
+    )
+    assert_equal [{ method: :get, path: "/v2/time_entries", params: { from: "2026-07-17", to: "2026-07-17", page: 1, per_page: 100 } }], client.requests
+  end
+
   def test_timesheet_cli_prints_project_tasks_and_multiline_notes
     client = AggregateClient.new([{ "time_entries" => [
       { "spent_date" => "2026-07-17", "hours" => 2, "notes" => "fixing tests\nstarting templates", "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
@@ -436,6 +455,25 @@ class HarvestWorklogTest < Minitest::Test
       return { "id" => @current_user_id } if path == "/v2/users/me"
 
       @pages.fetch(params.fetch(:page) - 1)
+    end
+  end
+
+  class MappingDataClient
+    attr_reader :requests
+
+    def initialize(assignments, entries)
+      @assignments = assignments
+      @entries = entries
+      @requests = []
+    end
+
+    def active_personal_task_assignments
+      @assignments
+    end
+
+    def request(method, path, params:)
+      @requests << { method:, path:, params: }
+      { "time_entries" => @entries, "next_page" => nil }
     end
   end
 end
