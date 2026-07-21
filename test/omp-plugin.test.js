@@ -226,7 +226,7 @@ test("completes the explicit timesheet hierarchy contextually", () => {
   const dates = harvestWorklogArgumentCompletions("timesheet ")
   assert.deepEqual(dates.slice(0, 2).map(item => item.value), ["timesheet today", "timesheet yesterday"])
   assert.match(dates[2].value, /^timesheet \d{4}-\d{2}-\d{2}$/)
-  assert.deepEqual(harvestWorklogArgumentCompletions("timesheet"), dates)
+  assert.deepEqual(harvestWorklogArgumentCompletions("timesheet").map(item => item.value), ["timesheet"])
   assert.deepEqual(harvestWorklogArgumentCompletions("timesheet t").map(item => item.value), ["timesheet today"])
   assert.deepEqual(
     harvestWorklogArgumentCompletions("timesheet today ").map(item => item.value),
@@ -269,7 +269,7 @@ test("parses quoted explicit timesheet arguments", () => {
   assert.equal(parseCommandArguments("timesheet today --project 'WRAP"), null)
 })
 
-test("registers autocomplete and reads local Project Time for slash timesheets", async () => {
+test("renders local Project Time without calling Harvest", async () => {
   const tools = []
   const commands = []
   const calls = []
@@ -320,7 +320,7 @@ test("registers autocomplete and reads local Project Time for slash timesheets",
     logPath: "/tmp/project-time.json",
   }])
   assert.equal(calls.length, 0)
-  assert.equal(messages[0].message.content, "WRAP (YG - SIS) · Mon, Jul 20 · 6:45\n\nProgramming\n- Fix test suite\n- Prototype template v3 UI")
+  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivities\n- Fix test suite\n- Prototype template v3 UI")
 
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 0)

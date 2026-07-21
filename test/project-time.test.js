@@ -41,7 +41,7 @@ test("normalizes and validates Project Time mapping settings", () => {
   )
 })
 
-test("formats daily human activities as Harvest-style notes", () => {
+test("labels local activity data and separate Harvest destination", () => {
   const plan = {
     groups: [
       { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Fix test suite", milliseconds: 24_040_000 },
@@ -53,14 +53,14 @@ test("formats daily human activities as Harvest-style notes", () => {
 
   assert.equal(
     formatProjectTimeTimesheet(plan, { project: "wrap", spentDate: "2026-07-20", mapping: { project: "WRAP (YG - SIS)", task: "Programming" } }),
-    "WRAP (YG - SIS) · Mon, Jul 20 · 6:45\n\nProgramming\n- Fix test suite\n- Prototype template v3 UI",
+    "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivities\n- Fix test suite\n- Prototype template v3 UI",
   )
   assert.equal(resolveProjectTimeDate("today", new Date(2026, 6, 20, 12)), "2026-07-20")
   assert.equal(resolveProjectTimeDate("yesterday", new Date(2026, 6, 20, 12)), "2026-07-19")
   assert.throws(() => resolveProjectTimeDate("2026-02-31"), /valid local date/)
   assert.equal(
     formatProjectTimeTimesheet({ groups: [] }, { project: "WRAP", spentDate: "2026-07-20" }),
-    "WRAP · Mon, Jul 20 · 0:00\n\nActivities\nNo local Project Time sessions found for WRAP on 2026-07-20.",
+    "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivities\nNo local Project Time sessions found for WRAP on 2026-07-20.",
   )
 })
 

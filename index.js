@@ -401,9 +401,6 @@ export function harvestWorklogArgumentCompletions(argumentPrefix) {
   const input = argumentPrefix
   const trimmed = input.trim()
 
-  if (trimmed.toLowerCase() === "timesheet") {
-    return dateCompletions().map(choice => ({ ...choice, value: `timesheet ${choice.value}` }))
-  }
 
   if (!trimmed || !input.includes(" ")) {
     const choices = [

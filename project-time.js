@@ -279,12 +279,16 @@ export function resolveProjectTimeDate(value, today = new Date()) {
 export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping }) {
   const [year, month, day] = spentDate.split("-").map(Number)
   const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
-  const heading = `${mapping?.project ?? project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
-  const task = mapping?.task ?? "Activities"
+  const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
+  const provenance = [
+    "Source: local OMP Project Time (not Harvest)",
+    ...(mapping ? [`Harvest destination: ${mapping.project} / ${mapping.task}`] : []),
+  ]
+  const task = "Activities"
   const activities = [...new Set(groups.map(group => group.activity || "Unlabelled"))]
 
-  if (activities.length === 0) return `${heading}\n\n${task}\nNo local Project Time sessions found for ${project} on ${spentDate}.`
-  return [heading, "", task, ...activities.map(activity => `- ${activity}`)].join("\n")
+  if (activities.length === 0) return [heading, ...provenance, "", task, `No local Project Time sessions found for ${project} on ${spentDate}.`].join("\n")
+  return [heading, ...provenance, "", task, ...activities.map(activity => `- ${activity}`)].join("\n")
 }
 
 function formatShortDate(date) {
