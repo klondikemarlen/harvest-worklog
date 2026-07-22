@@ -5,6 +5,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "test": "npm run test:omp",
     "test:omp": "node --test test/*.test.js",
     "release": "bin/release-plugin",
     "verify:release": "bin/verify-plugin-release"
