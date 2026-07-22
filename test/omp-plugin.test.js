@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import harvestTimeExtension, { aggregateArguments, createProjectTimeMappingReviewTool, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
+import harvestTimeExtension, { aggregateArguments, createProjectTimeMappingReviewTool, createProjectTimeProjectNamesLoader, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
 
 const schema = () => ({
   regex() { return this },
@@ -232,6 +232,27 @@ test("completes the explicit timesheet hierarchy contextually", () => {
     harvestWorklogArgumentCompletions("timesheet today ").map(item => item.value),
     ["timesheet today --project", "timesheet today --help"],
   )
+  const projects = ["Ice Fog Analytics", "wrap", "WRAP"]
+  assert.deepEqual(
+    harvestWorklogArgumentCompletions("timesheet today --project ", projects).map(item => item.value),
+    ["timesheet today --project \"Ice Fog Analytics\"", "timesheet today --project wrap", "timesheet today --project WRAP"],
+  )
+  assert.deepEqual(
+    harvestWorklogArgumentCompletions("timesheet today --project w", projects).map(item => item.value),
+    ["timesheet today --project wrap", "timesheet today --project WRAP"],
+  )
+  assert.deepEqual(
+    harvestWorklogArgumentCompletions("timesheet today --project Ice F", projects).map(item => item.value),
+    ["timesheet today --project \"Ice Fog Analytics\""],
+  )
+  assert.deepEqual(
+    harvestWorklogArgumentCompletions("timesheet today --project w", [" wrap "]).map(item => item.value),
+    ["timesheet today --project \" wrap \""],
+  )
+  assert.deepEqual(
+    parseHarvestWorklogArguments(harvestWorklogArgumentCompletions("timesheet today --project i", projects)[0].value),
+    { argv: ["timesheet", "today", "--project", "Ice Fog Analytics"] },
+  )
   assert.deepEqual(
     harvestWorklogArgumentCompletions("timesheet today --project WRAP ").map(item => item.value),
     ["timesheet today --project WRAP --help"],
@@ -243,6 +264,25 @@ test("completes the explicit timesheet hierarchy contextually", () => {
   assert.equal(harvestWorklogArgumentCompletions("timesheet today extra "), null)
   assert.equal(harvestWorklogArgumentCompletions("today "), null)
   assert.equal(harvestWorklogArgumentCompletions("aggregate "), null)
+})
+
+test("caches local project names until the log changes", () => {
+  let reads = 0
+  let mtimeMs = 1
+  const loader = createProjectTimeProjectNamesLoader({
+    stat: () => ({ mtimeMs, size: 10 }),
+    read: () => {
+      reads += 1
+      return JSON.stringify({ entries: [{ sourceKind: "human_active", project: "wrap" }] })
+    },
+  })
+
+  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
+  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
+  assert.equal(reads, 1)
+  mtimeMs = 2
+  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
+  assert.equal(reads, 2)
 })
 
 test("parses quoted explicit timesheet arguments", () => {
@@ -286,6 +326,10 @@ test("renders local Project Time without calling Harvest", async () => {
     command: " ",
     projectTimeMappings: '{"wrap":{"project":"WRAP (YG - SIS)","task":"Programming"}}',
     projectTimeLogPath: " /tmp/project-time.json ",
+    loadProjectTimeProjectNames: logPath => {
+      assert.equal(logPath, "/tmp/project-time.json")
+      return ["Ice Fog Analytics", "wrap"]
+    },
     loadProjectTimeTransform: async options => {
       loads.push(options)
       return {
@@ -313,7 +357,10 @@ test("renders local Project Time without calling Harvest", async () => {
   const command = commands[0].command
 
   assert.equal(commands[0].name, "harvest-worklog")
-  assert.equal(command.getArgumentCompletions, harvestWorklogArgumentCompletions)
+  assert.deepEqual(
+    command.getArgumentCompletions("timesheet today --project w").map(item => item.value),
+    ["timesheet today --project wrap"],
+  )
   await command.handler("", { cwd: "/tmp", ui })
   assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE --project PROJECT/)
 

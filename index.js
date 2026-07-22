@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process"
-import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, resolveProjectTimeDate } from "./project-time.js"
+import { readFileSync, statSync } from "node:fs"
+import { approvedProjectTimeMappings, defaultProjectTimeLogPath, formatProjectTimeTimesheet, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
 
 function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
@@ -423,7 +424,7 @@ const TIMESHEET_FLAGS = {
   "--help": "Show local Project Time timesheet help",
 }
 
-export function harvestWorklogArgumentCompletions(argumentPrefix) {
+export function harvestWorklogArgumentCompletions(argumentPrefix, projects = []) {
   const input = argumentPrefix
   const trimmed = input.trim()
 
@@ -452,6 +453,8 @@ export function harvestWorklogArgumentCompletions(argumentPrefix) {
   }
 
   if (positionals.length !== 1 || !DATE_PATTERN.test(positionals[0])) return null
+  const projectCompletions = completionForProject(input, projects)
+  if (projectCompletions) return projectCompletions
 
   const flags = !words.includes("--project")
     ? TIMESHEET_FLAGS
@@ -472,6 +475,50 @@ function completionForFlag(input, flags) {
     .filter(([flag]) => !words.includes(flag) && (!current || flag.startsWith(current)))
     .map(([flag, description]) => ({ label: flag, value: `${base} ${flag}`.trim(), description }))
   return choices.length > 0 ? choices : null
+}
+
+function completionForProject(input, projects) {
+  const match = /(?:^|\s)--project(?:\s|$)/.exec(input)
+  if (!match) return null
+
+  const valueStart = (match.index ?? 0) + match[0].length
+  const entered = input.slice(valueStart)
+  if (/\s--/.test(entered)) return null
+  const completedProject = parseCommandArguments(input)?.[3]
+  if (input.endsWith(" ") && projects.includes(completedProject)) return null
+
+  const prefix = entered.trim().replace(/^['"]/, "")
+  const base = input.slice(0, valueStart).trimEnd()
+  const choices = projects
+    .filter(project => project.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+    .map(project => ({
+      label: project,
+      value: `${base} ${/^[^\s"'\\]+$/.test(project) ? project : JSON.stringify(project)}`,
+      description: "Local OMP Project Time project",
+    }))
+  return choices.length > 0 ? choices : null
+}
+
+export function createProjectTimeProjectNamesLoader({ read = readFileSync, stat = statSync } = {}) {
+  let cachedPath
+  let cachedStamp
+  let cachedProjects = []
+
+  return logPath => {
+    const path = logPath || defaultProjectTimeLogPath()
+    try {
+      const { mtimeMs, size } = stat(path)
+      const stamp = `${mtimeMs}:${size}`
+      if (cachedPath === path && cachedStamp === stamp) return cachedProjects
+
+      cachedProjects = projectTimeProjectNames(JSON.parse(read(path, "utf8")))
+      cachedPath = path
+      cachedStamp = stamp
+      return cachedProjects
+    } catch {
+      return []
+    }
+  }
 }
 
 function hasFlagValue(words, flag) {
@@ -544,10 +591,11 @@ export default function harvestTimeExtension(pi, options = {}) {
   const projectTimeMappings = options.projectTimeMappings?.trim() || "{}"
   const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
+  const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
   const summarize = options.generateDailySummary ?? generateDailySummary
   pi.registerCommand("harvest-worklog", {
     description: "Show one project's local OMP Project Time",
-    getArgumentCompletions: harvestWorklogArgumentCompletions,
+    getArgumentCompletions: input => harvestWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
     handler: async (args, ctx) => {
       const parsed = parseHarvestWorklogArguments(args)
       if (!parsed || parsed.help) {

@@ -124,6 +124,17 @@ function matchesHarvestAssignment(entry, assignment) {
   return entry?.project?.id === assignment.project.id && entry?.task?.id === assignment.task.id
 }
 
+export function projectTimeProjectNames(state) {
+  if (!state || !Array.isArray(state.entries)) {
+    throw new Error("OMP Project Time log is missing an entries array")
+  }
+
+  return [...new Set(state.entries
+    .filter(session => session?.sourceKind === "human_active" && typeof session.project === "string" && session.project.trim().length > 0)
+    .map(session => session.project))]
+    .sort((left, right) => left.localeCompare(right))
+}
+
 export function projectTimeEntries(state, mappings, { from, to }) {
   if (!state || !Array.isArray(state.entries)) {
     throw new Error("OMP Project Time log is missing an entries array")

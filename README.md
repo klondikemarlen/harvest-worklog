@@ -73,7 +73,7 @@ harvest-worklog timesheet today --project WRAP
 The `/harvest-worklog timesheet today --project wrap` slash command reads only the requested local OMP Project Time day. Its output explicitly says `Source: local OMP Project Time (not Harvest)`, shows up to five duration-ranked activity labels and an honest total for any other activity labels, then asks the active OMP model for a clearly labelled best-effort worklog draft from those same local records. If no model is available or generation fails, the local totals still render. When `projectTimeMappings` contains `wrap`, it separately shows the prospective `Harvest destination`; it does not present that destination as recorded Harvest data. It never calls Harvest or uploads entries.
 `/project-time history` reports all logged dates, so its totals can be larger than the selected day.
 
-Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear only after selecting `timesheet `, before the contextual `--project` option. The editable project name must exactly match the case-sensitive local Project Time name.
+Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear only after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names; a prefix filters them case-insensitively. Completion preserves the case-sensitive name required by the command.
 
 ## OMP settings
 

@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 
 import { createProjectTimeTool, createProjectTimeTransformTool, workEntryArguments } from "../index.js"
-import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const narrativeFixtures = JSON.parse(await readFile(new URL("./fixtures/narrative-worklog-scenarios.json", import.meta.url), "utf8"))
 
@@ -61,6 +61,21 @@ test("labels local activity data and separate Harvest destination", () => {
   assert.equal(
     formatProjectTimeTimesheet({ groups: [] }, { project: "WRAP", spentDate: "2026-07-20" }),
     "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\nNo local Project Time sessions found for WRAP on 2026-07-20.",
+  )
+})
+
+test("lists unique human-active local Project Time names", () => {
+  assert.deepEqual(
+    projectTimeProjectNames({
+      entries: [
+        { sourceKind: "human_active", project: "wrap" },
+        { sourceKind: "agent_turn_elapsed", project: "ignored" },
+        { sourceKind: "human_active", project: "Ice Fog Analytics" },
+        { sourceKind: "human_active", project: "wrap" },
+        { sourceKind: "human_active", project: " " },
+      ],
+    }),
+    ["Ice Fog Analytics", "wrap"],
   )
 })
 
