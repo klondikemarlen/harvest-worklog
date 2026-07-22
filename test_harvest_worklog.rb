@@ -454,6 +454,7 @@ class HarvestWorklogTest < Minitest::Test
 
   def test_reconcile_cli_rounds_milliseconds_to_nearest_second
     assert_equal "1h 0m 1s", HarvestWorklog::ReconcileCLI.duration(3_600_600)
+    assert_equal "0h 0m 0s", HarvestWorklog::ReconcileCLI.signed_duration(-400)
   end
 
   def test_reconcile_cli_reports_empty_harvest_and_local_data
@@ -472,7 +473,7 @@ class HarvestWorklogTest < Minitest::Test
 
     assert_includes output.string, "Manual Harvest: 0h 0m 0s (0 entries)"
     assert_includes output.string, "Raw intervals: 0h 0m 0s"
-    assert_includes output.string, "Harvest minus local union: +0h 0m 0s"
+    assert_includes output.string, "Harvest minus local union: 0h 0m 0s"
   end
 
   def test_reconcile_cli_reports_a_malformed_local_log

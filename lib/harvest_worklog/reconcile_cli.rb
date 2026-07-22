@@ -102,7 +102,10 @@ module HarvestWorklog
     end
 
     def self.signed_duration(milliseconds)
-      "#{milliseconds.negative? ? '-' : '+'}#{duration(milliseconds.abs)}"
+      seconds = (milliseconds / 1000.0).round
+      return duration(0) if seconds.zero?
+
+      "#{seconds.negative? ? '-' : '+'}#{duration(seconds.abs * 1000)}"
     end
 
     def self.duration(milliseconds)
