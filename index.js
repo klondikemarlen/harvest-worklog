@@ -108,7 +108,7 @@ function workstreamMappings(rawWorkstreams, activities) {
     if (!activities.includes(activity) || workstreams.has(activity) || !workstream || workstream.length > 100 || /[\r\n]/.test(workstream)) return undefined
     workstreams.set(activity, workstream)
   }
-  if (workstreams.size !== activities.length || new Set(workstreams.values()).size > 12) return undefined
+  if (workstreams.size !== activities.length || new Set(workstreams.values()).size > 8) return undefined
   return workstreams
 }
 
@@ -117,7 +117,8 @@ export function parseDailySummary(content, activities, categoryOptions = []) {
     const parsed = JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""))
     const classification = classificationMappings(parsed.classifications, activities, categoryOptions)
     const legacyWorkstreams = workstreamMappings(parsed.workstreams, activities)
-    if (categoryOptions.length > 0 && !classification && !legacyWorkstreams) return undefined
+    if (parsed.classifications !== undefined && !classification) return undefined
+    if (parsed.workstreams !== undefined && !legacyWorkstreams) return undefined
     const categories = classification?.categories ?? categoryMappings(parsed.categories, activities, categoryOptions)
     if (!categories) return undefined
     const workstreams = classification?.workstreams ?? legacyWorkstreams
