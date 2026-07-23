@@ -50,8 +50,8 @@ function categoryMappings(rawCategories, activities, categoryOptions = []) {
     if (!mapping || typeof mapping !== "object" || Array.isArray(mapping) || typeof mapping.activity !== "string" || typeof mapping.category !== "string") return undefined
     const activity = mapping.activity
     const category = mapping.category.trim()
-    if (!activities.includes(activity) || categories.has(activity) || !category || category.length > 80 || /[\r\n]/.test(category)) return undefined
-    if (categoryOptions.length > 0 && !categoryOptions.includes(category)) return undefined
+    if (!activities.includes(activity) || categories.has(activity) || !category || /[\r\n]/.test(category)) return undefined
+    if (categoryOptions.length > 0 ? !categoryOptions.includes(category) : category.length > 80) return undefined
     categories.set(activity, category)
   }
   if (categories.size !== activities.length || new Set(categories.values()).size > 5) return undefined

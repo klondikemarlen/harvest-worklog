@@ -307,6 +307,12 @@ test("validates AI activity category responses", () => {
     parseDailySummary(JSON.stringify({ categories: [{ activity: "Build", category: "Unassigned" }, { activity: "Review", category: "WRAP / Programming" }] }), activities, harvestCategories),
     undefined,
   )
+  const longHarvestCategory = "Project ".repeat(12) + "/ Task"
+  assert.ok(parseDailySummary(
+    JSON.stringify({ categories: [{ activity: "Build", category: longHarvestCategory }, { activity: "Review", category: longHarvestCategory }] }),
+    activities,
+    [longHarvestCategory],
+  ))
   const manyActivities = Array.from({ length: 65 }, (_, index) => `Activity ${index + 1}`)
   const highCardinality = parseDailySummary(JSON.stringify({ categories: manyActivities.map((activity, index) => ({ activity, category: ["Coordination", "Implementation", "Review", "Design", "Quality"][index % 5] })) }), manyActivities)
   assert.equal(highCardinality.categories.size, 65)
