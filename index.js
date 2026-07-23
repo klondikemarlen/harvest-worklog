@@ -72,7 +72,7 @@ export function parseDailySummary(content, activities, categoryOptions = []) {
   }
 }
 
-async function loadHarvestCategories(command, run, ctx, spentDate) {
+async function loadHarvestAssignments(command, run, ctx, spentDate) {
   const result = await run(command, ["mapping-data", spentDate, spentDate], { cwd: ctx.cwd })
   if (result.spawnError) throw result.spawnError
   if (result.code !== 0) throw new Error(result.stderr.trim() || `${command} exited with ${result.code}`)
@@ -639,7 +639,7 @@ export default function harvestTimeExtension(pi, options = {}) {
   const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
   const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
-  const loadCategories = options.loadHarvestCategories ?? ((spentDate, ctx) => loadHarvestCategories(command, run, ctx, spentDate))
+  const loadCategories = options.loadHarvestCategories ?? ((spentDate, ctx) => loadHarvestAssignments(command, run, ctx, spentDate))
   const summarize = options.generateDailySummary ?? generateDailySummary
   pi.registerCommand("harvest-worklog", {
     description: "Build a review-only Harvest-shaped draft from one project's local OMP Project Time",

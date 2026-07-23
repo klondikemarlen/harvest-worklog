@@ -352,7 +352,6 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
   const messages = []
   const notifications = []
   const transformLoads = []
-  const categoryLoads = []
   let summaries = 0
   harvestTimeExtension({
     zod: { z },
@@ -366,13 +365,6 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
     loadProjectTimeProjectNames: logPath => {
       assert.equal(logPath, "/tmp/project-time.json")
       return ["Ice Fog Analytics", "wrap"]
-    },
-    loadHarvestCategories: async (spentDate, ctx) => {
-      categoryLoads.push({ spentDate, cwd: ctx.cwd })
-      return [
-        { project: { name: "WRAP (YG - SIS)" }, task: { name: "Programming" } },
-        { project: { name: "WRAP Support (YG - SIS)" }, task: { name: "Support" } },
-      ]
     },
     loadProjectTimeTransform: async options => {
       transformLoads.push(options)
@@ -402,6 +394,18 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
     },
     run: async (...args) => {
       calls.push(args)
+      if (args[1][0] === "mapping-data") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            assignments: [
+              { project: { name: "WRAP (YG - SIS)" }, task: { name: "Programming" } },
+              { project: { name: "WRAP Support (YG - SIS)" }, task: { name: "Support" } },
+            ],
+          }),
+          stderr: "",
+        }
+      }
       return { code: 0, stdout: "CLI output", stderr: "" }
     },
   })
@@ -427,10 +431,14 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
     mappings: new Map(),
     logPath: "/tmp/project-time.json",
   }])
-  assert.deepEqual(categoryLoads, [{ spentDate: "2026-07-20", cwd: "/tmp" }])
+  assert.deepEqual(calls, [[
+    "harvest-worklog",
+    ["mapping-data", "2026-07-20", "2026-07-20"],
+    { cwd: "/tmp" },
+  ]])
   assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP (YG - SIS)\nProgramming\n- Fix test suite\n6:40\nWRAP Support (YG - SIS)\nSupport\n- Prototype template v3 UI\n0:05\n\nTotal: 6:45")
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(calls.length, 0)
+  assert.equal(calls.length, 1)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
