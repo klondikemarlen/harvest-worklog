@@ -314,7 +314,7 @@ export function resolveProjectTimeDate(value, today = new Date()) {
   }
   return value
 }
-export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, summary, harvestAssignments, harvestError }) {
+export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, workstreams, summary, harvestAssignments, harvestError }) {
   const [year, month, day] = spentDate.split("-").map(Number)
   const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
   const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
@@ -325,6 +325,7 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, 
   if (harvestAssignments !== undefined) {
     return formatHarvestDraft(heading, provenance, groups, {
       categories,
+      workstreams,
       harvestAssignments,
       harvestError,
       mapping,
@@ -358,8 +359,7 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, 
     ...(summary ? ["", "Worklog draft (generated from local records)", summary] : []),
   ].join("\n")
 }
-
-function formatHarvestDraft(heading, provenance, groups, { categories, harvestAssignments, harvestError, mapping, project, spentDate }) {
+function formatHarvestDraft(heading, provenance, groups, { categories, workstreams, harvestAssignments, harvestError, mapping, project, spentDate }) {
   const assignments = new Map()
   for (const assignment of harvestAssignments) {
     const harvestProject = assignment?.project?.name
@@ -369,21 +369,23 @@ function formatHarvestDraft(heading, provenance, groups, { categories, harvestAs
     }
   }
 
+  const aggregateWorkstreams = workstreams?.size > 0 && groups.every(group => workstreams.has(group.activity || "Unlabelled"))
   const destinations = new Map()
   const unmapped = new Map()
   for (const group of groups) {
     const activity = group.activity || "Unlabelled"
     const category = categories?.get(activity)
     const destination = assignments.get(category) ?? mapping
+    const label = aggregateWorkstreams ? workstreams.get(activity) : activity
     const bucket = destination ? destinations : unmapped
-    const key = destination ? `${destination.project} / ${destination.task}` : activity
+    const key = destination ? `${destination.project} / ${destination.task}` : "unmapped"
     const entry = bucket.get(key) ?? {
-      activities: new Map(),
+      workstreams: new Map(),
       milliseconds: 0,
       ...(destination ?? {}),
     }
     entry.milliseconds += group.milliseconds
-    entry.activities.set(activity, (entry.activities.get(activity) ?? 0) + group.milliseconds)
+    entry.workstreams.set(label, (entry.workstreams.get(label) ?? 0) + group.milliseconds)
     bucket.set(key, entry)
   }
 
@@ -392,15 +394,17 @@ function formatHarvestDraft(heading, provenance, groups, { categories, harvestAs
     sections.push(
       entry.project,
       entry.task,
-      ...[...entry.activities.keys()].sort((left, right) => left.localeCompare(right)).map(activity => `- ${activity}`),
-      formatDayTotal(entry.milliseconds),
+      ...[...entry.workstreams]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([label, milliseconds]) => `- ${label} · ${formatDayTotal(milliseconds)}`),
+      `Total: ${formatDayTotal(entry.milliseconds)}`,
     )
   }
   if (unmapped.size > 0) {
     const unmappedMilliseconds = [...unmapped.values()].reduce((total, entry) => total + entry.milliseconds, 0)
     sections.push(
       "Harvest destination not configured",
-      ...[...unmapped.values()].sort(compareDraftEntries).flatMap(entry => [...entry.activities.keys()].sort((left, right) => left.localeCompare(right)).map(activity => `- ${activity}`)),
+      ...[...unmapped.values()].flatMap(entry => [...entry.workstreams.keys()].sort((left, right) => left.localeCompare(right)).map(label => `- ${label}`)),
       `Local total: ${formatDayTotal(unmappedMilliseconds)}`,
       `Configure a Harvest project/task mapping or category assignment for ${project} on ${spentDate}.`,
     )

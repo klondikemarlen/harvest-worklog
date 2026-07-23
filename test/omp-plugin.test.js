@@ -296,23 +296,89 @@ test("validates AI activity category responses", () => {
   assert.equal(generated.summary, "- Built the feature.\n- Reviewed the change.")
   const fenced = parseDailySummary('```json\n{"categories":{"Build":"Implementation","Review":"Review"}}\n```', activities)
   assert.deepEqual([...fenced.categories], [["Build", "Implementation"], ["Review", "Review"]])
+  const compactWithoutHarvest = parseDailySummary(JSON.stringify({
+    classifications: [
+      { activity: "Build", category: "Implementation", workstream: "Feature delivery" },
+      { activity: "Review", category: "Review", workstream: "Feature delivery" },
+    ],
+  }), activities)
+  assert.deepEqual([...compactWithoutHarvest.workstreams], [["Build", "Feature delivery"], ["Review", "Feature delivery"]])
+  const compactWithIds = parseDailySummary(JSON.stringify({
+    classifications: [
+      { id: "1", category: "Implementation", workstream: "Feature delivery" },
+      { id: "2", category: "Review", workstream: "Feature delivery" },
+    ],
+  }), activities)
+  assert.deepEqual([...compactWithIds.categories], [["Build", "Implementation"], ["Review", "Review"]])
   const harvestCategories = ["WRAP / Programming", "WRAP Support / Support"]
   const harvestMapped = parseDailySummary(
-    JSON.stringify({ categories: [{ activity: "Build", category: "WRAP / Programming" }, { activity: "Review", category: "WRAP Support / Support" }] }),
+    JSON.stringify({
+      classifications: [
+        { activity: "Build", category: "WRAP / Programming", workstream: "Feature delivery" },
+        { activity: "Review", category: "WRAP Support / Support", workstream: "Feature delivery" },
+      ],
+    }),
     activities,
     harvestCategories,
   )
   assert.deepEqual([...harvestMapped.categories], [["Build", "WRAP / Programming"], ["Review", "WRAP Support / Support"]])
+  assert.deepEqual([...harvestMapped.workstreams], [["Build", "Feature delivery"], ["Review", "Feature delivery"]])
   assert.equal(
-    parseDailySummary(JSON.stringify({ categories: [{ activity: "Build", category: "Unassigned" }, { activity: "Review", category: "WRAP / Programming" }] }), activities, harvestCategories),
+    parseDailySummary(JSON.stringify({
+      classifications: [{ activity: "Build", category: "WRAP / Programming", workstream: "Feature delivery" }],
+    }), activities, harvestCategories),
+    undefined,
+  )
+  const legacyHarvestMapped = parseDailySummary(
+    JSON.stringify({
+      categories: [
+        { activity: "Build", category: "WRAP / Programming" },
+        { activity: "Review", category: "WRAP Support / Support" },
+      ],
+      workstreams: [
+        { activity: "Build", workstream: "Feature delivery" },
+        { activity: "Review", workstream: "Feature delivery" },
+      ],
+    }),
+    activities,
+    harvestCategories,
+  )
+  assert.deepEqual([...legacyHarvestMapped.workstreams], [["Build", "Feature delivery"], ["Review", "Feature delivery"]])
+  assert.equal(
+    parseDailySummary(JSON.stringify({
+      classifications: [
+        { activity: "Build", category: "WRAP / Programming", workstream: "Feature delivery\nunsafe" },
+        { activity: "Review", category: "WRAP Support / Support", workstream: "Feature delivery" },
+      ],
+    }), activities, harvestCategories),
+    undefined,
+  )
+  assert.equal(
+    parseDailySummary(JSON.stringify({
+      classifications: [
+        { activity: "Build", category: "Unassigned", workstream: "Feature delivery" },
+        { activity: "Review", category: "WRAP / Programming", workstream: "Feature delivery" },
+      ],
+    }), activities, harvestCategories),
     undefined,
   )
   const longHarvestCategory = "Project ".repeat(12) + "/ Task"
   assert.ok(parseDailySummary(
-    JSON.stringify({ categories: [{ activity: "Build", category: longHarvestCategory }, { activity: "Review", category: longHarvestCategory }] }),
+    JSON.stringify({
+      classifications: [
+        { activity: "Build", category: longHarvestCategory, workstream: "Feature delivery" },
+        { activity: "Review", category: longHarvestCategory, workstream: "Feature delivery" },
+      ],
+    }),
     activities,
     [longHarvestCategory],
   ))
+  const nineActivities = Array.from({ length: 9 }, (_, index) => `Work ${index + 1}`)
+  const nineWorkstreams = parseDailySummary(JSON.stringify({
+    categories: nineActivities.map(activity => ({ activity, category: "WRAP / Programming" })),
+    workstreams: nineActivities.map((activity, index) => ({ activity, workstream: `Stream ${index + 1}` })),
+  }), nineActivities, ["WRAP / Programming"])
+  assert.equal(nineWorkstreams.workstreams.size, 9)
   const manyActivities = Array.from({ length: 65 }, (_, index) => `Activity ${index + 1}`)
   const highCardinality = parseDailySummary(JSON.stringify({ categories: manyActivities.map((activity, index) => ({ activity, category: ["Coordination", "Implementation", "Review", "Design", "Quality"][index % 5] })) }), manyActivities)
   assert.equal(highCardinality.categories.size, 65)
@@ -392,10 +458,16 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
       ])
       assert.deepEqual(categoryOptions, ["WRAP (YG - SIS) / Programming", "WRAP Support (YG - SIS) / Support"])
       return summaries++ === 0
-        ? { categories: new Map([
-          ["Fix test suite", "WRAP (YG - SIS) / Programming"],
-          ["Prototype template v3 UI", "WRAP Support (YG - SIS) / Support"],
-        ]) }
+        ? {
+          categories: new Map([
+            ["Fix test suite", "WRAP (YG - SIS) / Programming"],
+            ["Prototype template v3 UI", "WRAP Support (YG - SIS) / Support"],
+          ]),
+          workstreams: new Map([
+            ["Fix test suite", "Project test suite"],
+            ["Prototype template v3 UI", "Template v3 development"],
+          ]),
+        }
         : undefined
     },
     run: async (...args) => {
@@ -442,7 +514,7 @@ test("renders a review-only Harvest draft from local Project Time", async () => 
     ["mapping-data", "2026-07-20", "2026-07-20"],
     { cwd: "/tmp" },
   ]])
-  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP (YG - SIS)\nProgramming\n- Fix test suite\n6:40\nWRAP Support (YG - SIS)\nSupport\n- Prototype template v3 UI\n0:05\n\nTotal: 6:45")
+  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP (YG - SIS)\nProgramming\n- Project test suite · 6:40\nTotal: 6:40\nWRAP Support (YG - SIS)\nSupport\n- Template v3 development · 0:05\nTotal: 0:05\n\nTotal: 6:45")
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 1)
   assert.deepEqual(

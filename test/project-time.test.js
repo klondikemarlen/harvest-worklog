@@ -81,12 +81,47 @@ test("renders a review-only Harvest-shaped draft grouped by suggested destinatio
         ["Fix tests", "WRAP / Programming"],
         ["Support QA", "WRAP Support / Support"],
       ]),
+      workstreams: new Map([
+        ["Support workflow", "Workflow support"],
+        ["Fix tests", "Feature delivery"],
+        ["Support QA", "Workflow support"],
+      ]),
       harvestAssignments: [
         { project: { name: "WRAP Support" }, task: { name: "Support" } },
         { project: { name: "WRAP" }, task: { name: "Programming" } },
       ],
     }),
-    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP Support\nSupport\n- Support QA\n- Support workflow\n2:30\nWRAP\nProgramming\n- Fix tests\n1:00\n\nTotal: 3:30",
+    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP Support\nSupport\n- Workflow support · 2:30\nTotal: 2:30\nWRAP\nProgramming\n- Feature delivery · 1:00\nTotal: 1:00\n\nTotal: 3:30",
+  )
+})
+
+test("keeps identical workstreams separate across Harvest destinations", () => {
+  assert.equal(
+    formatProjectTimeTimesheet(
+      {
+        groups: [
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build support", milliseconds: 3_600_000 },
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build product", milliseconds: 3_600_000 },
+        ],
+      },
+      {
+        project: "wrap",
+        spentDate: "2026-07-20",
+        categories: new Map([
+          ["Build support", "WRAP Support / Support"],
+          ["Build product", "WRAP / Programming"],
+        ]),
+        workstreams: new Map([
+          ["Build support", "Feature delivery"],
+          ["Build product", "Feature delivery"],
+        ]),
+        harvestAssignments: [
+          { project: { name: "WRAP Support" }, task: { name: "Support" } },
+          { project: { name: "WRAP" }, task: { name: "Programming" } },
+        ],
+      },
+    ),
+    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP\nProgramming\n- Feature delivery · 1:00\nTotal: 1:00\nWRAP Support\nSupport\n- Feature delivery · 1:00\nTotal: 1:00\n\nTotal: 2:00",
   )
 })
 
