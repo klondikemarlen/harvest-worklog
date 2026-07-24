@@ -165,10 +165,15 @@ test("renders durations for unmapped workstreams", () => {
       {
         project: "wrap",
         spentDate: "2026-07-20",
+        categories: new Map([
+          ["Prompt one", null],
+          ["Prompt two", null],
+        ]),
         workstreams: new Map([
           ["Prompt one", "Feature delivery"],
           ["Prompt two", "Feature delivery"],
         ]),
+        mapping: { project: "WRAP", task: "Programming" },
         harvestAssignments: [],
       },
     ),

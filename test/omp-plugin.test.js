@@ -339,6 +339,20 @@ test("validates AI activity category responses", () => {
   assert.equal(legacyCategoryOnly.workstreams, undefined)
   assert.deepEqual([...harvestMapped.categories], [["Build", "WRAP / Programming"], ["Review", "WRAP Support / Support"]])
   assert.deepEqual([...harvestMapped.workstreams], [["Build", "Feature delivery"], ["Review", "Feature delivery"]])
+  const unmappedClassification = parseDailySummary(JSON.stringify({
+    classifications: [
+      { id: "1", category: null, workstream: "Unmapped work" },
+      { id: "2", category: "WRAP / Support", workstream: "Feature delivery" },
+    ],
+  }), activities, ["WRAP / Support"])
+  assert.equal(unmappedClassification.categories.get("Build"), null)
+  const fiveCategoriesPlusNull = parseDailySummary(JSON.stringify({
+    classifications: [
+      { id: "1", category: null, workstream: "Feature delivery" },
+      ...Array.from({ length: 5 }, (_, index) => ({ id: String(index + 2), category: `WRAP / ${index}`, workstream: "Feature delivery" })),
+    ],
+  }), Array.from({ length: 6 }, (_, index) => `Category activity ${index + 1}`), Array.from({ length: 5 }, (_, index) => `WRAP / ${index}`))
+  assert.equal(fiveCategoriesPlusNull.categories.size, 6)
   assert.equal(
     parseDailySummary(JSON.stringify({
       classifications: [{ activity: "Build", category: "WRAP / Programming", workstream: "Feature delivery" }],
