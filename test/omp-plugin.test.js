@@ -295,6 +295,10 @@ test("validates AI activity category responses", () => {
   assert.deepEqual([...generated.categories], [["Build", "Implementation"], ["Review", "Review"]])
   assert.equal(generated.summary, "- Built the feature.\n- Reviewed the change.")
   const fenced = parseDailySummary('```json\n{"categories":{"Build":"Implementation","Review":"Review"}}\n```', activities)
+  const worklogOnly = parseDailySummary(JSON.stringify({ worklog: ["Investigated the scheduler issue.", "Improved the workflow tooling."] }), activities, ["WRAP / Programming"])
+  assert.equal(worklogOnly.categories, undefined)
+  assert.equal(worklogOnly.summary, "- Investigated the scheduler issue.\n- Improved the workflow tooling.")
+  assert.equal(parseDailySummary(JSON.stringify({ worklog: ["unsafe\nline"] }), activities), undefined)
   assert.deepEqual([...fenced.categories], [["Build", "Implementation"], ["Review", "Review"]])
   const compactWithoutHarvest = parseDailySummary(JSON.stringify({
     classifications: [
@@ -335,6 +339,20 @@ test("validates AI activity category responses", () => {
   assert.equal(legacyCategoryOnly.workstreams, undefined)
   assert.deepEqual([...harvestMapped.categories], [["Build", "WRAP / Programming"], ["Review", "WRAP Support / Support"]])
   assert.deepEqual([...harvestMapped.workstreams], [["Build", "Feature delivery"], ["Review", "Feature delivery"]])
+  const unmappedClassification = parseDailySummary(JSON.stringify({
+    classifications: [
+      { id: "1", category: null, workstream: "Unmapped work" },
+      { id: "2", category: "WRAP / Support", workstream: "Feature delivery" },
+    ],
+  }), activities, ["WRAP / Support"])
+  assert.equal(unmappedClassification.categories.get("Build"), null)
+  const fiveCategoriesPlusNull = parseDailySummary(JSON.stringify({
+    classifications: [
+      { id: "1", category: null, workstream: "Feature delivery" },
+      ...Array.from({ length: 5 }, (_, index) => ({ id: String(index + 2), category: `WRAP / ${index}`, workstream: "Feature delivery" })),
+    ],
+  }), Array.from({ length: 6 }, (_, index) => `Category activity ${index + 1}`), Array.from({ length: 5 }, (_, index) => `WRAP / ${index}`))
+  assert.equal(fiveCategoriesPlusNull.categories.size, 6)
   assert.equal(
     parseDailySummary(JSON.stringify({
       classifications: [{ activity: "Build", category: "WRAP / Programming", workstream: "Feature delivery" }],
@@ -385,20 +403,37 @@ test("validates AI activity category responses", () => {
     activities,
     [longHarvestCategory],
   ))
-  const eightActivities = Array.from({ length: 8 }, (_, index) => `Work ${index + 1}`)
-  const eightWorkstreams = parseDailySummary(JSON.stringify({
-    categories: eightActivities.map(activity => ({ activity, category: "WRAP / Programming" })),
-    workstreams: eightActivities.map((activity, index) => ({ activity, workstream: `Stream ${index + 1}` })),
-  }), eightActivities, ["WRAP / Programming"])
-  assert.equal(eightWorkstreams.workstreams.size, 8)
-  const nineActivities = Array.from({ length: 9 }, (_, index) => `Work ${index + 1}`)
-  const nineWorkstreams = parseDailySummary(JSON.stringify({
-    categories: nineActivities.map(activity => ({ activity, category: "WRAP / Programming" })),
-    workstreams: nineActivities.map((activity, index) => ({ activity, workstream: `Stream ${index + 1}` })),
-  }), nineActivities, ["WRAP / Programming"])
-  assert.equal(nineWorkstreams, undefined)
+  const fourLegacyActivities = Array.from({ length: 4 }, (_, index) => `Legacy ${index + 1}`)
+  const fourLegacyWorkstreams = parseDailySummary(JSON.stringify({
+    categories: fourLegacyActivities.map(activity => ({ activity, category: "WRAP / Programming" })),
+    workstreams: fourLegacyActivities.map((activity, index) => ({ activity, workstream: `Stream ${index + 1}` })),
+  }), fourLegacyActivities, ["WRAP / Programming"])
+  assert.equal(fourLegacyWorkstreams.workstreams.size, 4)
+  const fiveLegacyActivities = Array.from({ length: 5 }, (_, index) => `Legacy ${index + 1}`)
+  const fiveLegacyWorkstreams = parseDailySummary(JSON.stringify({
+    categories: fiveLegacyActivities.map(activity => ({ activity, category: "WRAP / Programming" })),
+    workstreams: fiveLegacyActivities.map((activity, index) => ({ activity, workstream: `Stream ${index + 1}` })),
+  }), fiveLegacyActivities, ["WRAP / Programming"])
+  assert.equal(fiveLegacyWorkstreams, undefined)
   const manyActivities = Array.from({ length: 65 }, (_, index) => `Activity ${index + 1}`)
   const highCardinality = parseDailySummary(JSON.stringify({ categories: manyActivities.map((activity, index) => ({ activity, category: ["Coordination", "Implementation", "Review", "Design", "Quality"][index % 5] })) }), manyActivities)
+  const fourClassifications = Array.from({ length: 4 }, (_, index) => ({
+    id: String(index + 1),
+    category: "WRAP / Programming",
+    workstream: `Stream ${index + 1}`,
+  }))
+  const fourActivities = fourClassifications.map((_, index) => `Activity ${index + 1}`)
+  const fourWorkstreams = parseDailySummary(JSON.stringify({ classifications: fourClassifications }), fourActivities, ["WRAP / Programming"])
+  assert.equal(fourWorkstreams.workstreams.size, 4)
+  const fiveClassifications = Array.from({ length: 5 }, (_, index) => ({
+    id: String(index + 1),
+    category: "WRAP / Programming",
+    workstream: `Stream ${index + 1}`,
+  }))
+  assert.equal(
+    parseDailySummary(JSON.stringify({ classifications: fiveClassifications }), fiveClassifications.map((_, index) => `Activity ${index + 1}`), ["WRAP / Programming"]),
+    undefined,
+  )
   assert.equal(highCardinality.categories.size, 65)
   assert.equal(parseDailySummary(JSON.stringify({ categories: [...manyActivities.map(activity => ({ activity, category: "Implementation" })), { activity: "ignored", category: "ignored" }] }), manyActivities), undefined)
   assert.equal(parseDailySummary("not JSON", activities), undefined)

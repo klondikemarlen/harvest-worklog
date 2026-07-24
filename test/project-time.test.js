@@ -131,7 +131,65 @@ test("keeps activities visible when no Harvest destination is configured", () =>
       { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Unassigned work", milliseconds: 1_200_000 }] },
       { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] },
     ),
-    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- Unassigned work\nLocal total: 0:20\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 0:20",
+    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- Unassigned work · 0:20\nLocal total: 0:20\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 0:20",
+  )
+})
+test("renders bounded worklog fallback for unmapped activities", () => {
+  assert.equal(
+    formatProjectTimeTimesheet(
+      {
+        groups: [
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt one", milliseconds: 1_800_000 },
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt two", milliseconds: 1_800_000 },
+        ],
+      },
+      {
+        project: "wrap",
+        spentDate: "2026-07-20",
+        harvestAssignments: [],
+        summary: "- Investigated the scheduler issue.\n- Improved the workflow tooling.",
+      },
+    ),
+    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- Investigated the scheduler issue.\n- Improved the workflow tooling.\nLocal total: 1:00\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 1:00",
+  )
+})
+test("renders durations for unmapped workstreams", () => {
+  assert.match(
+    formatProjectTimeTimesheet(
+      {
+        groups: [
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt one", milliseconds: 1_800_000 },
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt two", milliseconds: 1_200_000 },
+        ],
+      },
+      {
+        project: "wrap",
+        spentDate: "2026-07-20",
+        categories: new Map([
+          ["Prompt one", null],
+          ["Prompt two", null],
+        ]),
+        workstreams: new Map([
+          ["Prompt one", "Feature delivery"],
+          ["Prompt two", "Feature delivery"],
+        ]),
+        mapping: { project: "WRAP", task: "Programming" },
+        harvestAssignments: [],
+      },
+    ),
+    /Harvest destination not configured[\s\S]*- Feature delivery · 0:50[\s\S]*Local total: 0:50/,
+  )
+})
+test("bounds raw unmapped activity fallback", () => {
+  const groups = ["A", "B", "C", "D", "E"].map((activity, index) => ({
+    spentDate: "2026-07-20",
+    sourceKind: "human_active",
+    activity,
+    milliseconds: (index + 1) * 60_000,
+  }))
+  assert.equal(
+    formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] }),
+    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nLocal total: 0:15\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 0:15",
   )
 })
 
