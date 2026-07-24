@@ -376,7 +376,7 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
   for (const group of groups) {
     const activity = group.activity || "Unlabelled"
     const category = categories?.get(activity)
-    const destination = assignments.get(category) ?? mapping
+    const destination = category === null ? undefined : assignments.get(category) ?? mapping
     const label = aggregateWorkstreams ? workstreams.get(activity) : activity
     const bucket = destination ? destinations : unmapped
     const key = destination ? `${destination.project} / ${destination.task}` : "unmapped"
