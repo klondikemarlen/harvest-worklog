@@ -481,7 +481,7 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
       task: z.string().trim().min(1).optional(),
       projectId: z.number().int().positive().optional(),
       taskId: z.number().int().positive().optional(),
-      hours: z.number().positive().finite().optional(),
+      hours: z.number().positive().optional(),
       notes: z.string().trim().min(1).optional(),
       holidayRegions: z.array(z.string().trim().min(1)).optional(),
       dryRun: z.boolean().optional(),
