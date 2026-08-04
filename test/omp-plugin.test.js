@@ -9,7 +9,6 @@ const schema = () => ({
   trim() { return this },
   int() { return this },
   positive() { return this },
-  finite() { return this },
   optional() { return this },
 })
 const z = {
@@ -470,7 +469,7 @@ test("parses quoted explicit timesheet arguments", () => {
   assert.equal(parseCommandArguments("timesheet today --project 'WRAP"), null)
 })
 
-test("renders a review-only Harvest draft from local Project Time", async () => {
+test("registers against OMP's schema API and renders a review-only Harvest draft from local Project Time", async () => {
   const tools = []
   const commands = []
   const calls = []
