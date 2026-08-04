@@ -6,7 +6,6 @@ import harvestTimeExtension, { aggregateArguments, createProjectTimeMappingRevie
 const schema = () => ({
   regex() { return this },
   min() { return this },
-  trim() { return this },
   int() { return this },
   positive() { return this },
   optional() { return this },
@@ -31,10 +30,10 @@ test("builds a safe CLI argument vector", () => {
     timeOffArguments({
       from: "2026-07-17",
       to: "2026-07-20",
-      project: "Time Off - Marlen",
-      task: "Vacation / PTO",
+      project: " Time Off - Marlen ",
+      task: " Vacation / PTO ",
       hours: 7.5,
-      notes: "Vacation",
+      notes: " Vacation ",
       dryRun: true,
     }),
     [
