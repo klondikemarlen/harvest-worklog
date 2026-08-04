@@ -10,6 +10,15 @@ function normalizeCommand(command) {
   return command?.trim() || "harvest-worklog"
 }
 
+function nonBlankString(z) {
+  return z.string().regex(/\S/, "must not be blank")
+}
+
+function trimOptionalString(value) {
+  return value?.trim() || undefined
+}
+
+
 async function generateDailySummary(records, ctx, categoryOptions = []) {
   const model = ctx.model
     ?? ctx.models?.current()
@@ -156,14 +165,17 @@ export function timeOffArguments({
   holidayRegions: callHolidayRegions = [],
   dryRun = false,
 }, { defaultHours = 7, holidayRegions = [] } = {}) {
+  const normalizedProject = trimOptionalString(project)
+  const normalizedTask = trimOptionalString(task)
+  const normalizedNotes = trimOptionalString(notes)
   const args = ["time-off", from, to]
-  if (project) args.push("--project", project)
-  if (task) args.push("--task", task)
+  if (normalizedProject) args.push("--project", normalizedProject)
+  if (normalizedTask) args.push("--task", normalizedTask)
   if (projectId !== undefined) args.push("--project-id", String(projectId))
   if (taskId !== undefined) args.push("--task-id", String(taskId))
   args.push("--hours", String(hours ?? defaultHours))
   for (const region of normalizeHolidayRegions([...holidayRegions, ...callHolidayRegions])) args.push("--holiday-region", region)
-  if (notes) args.push("--notes", notes)
+  if (normalizedNotes) args.push("--notes", normalizedNotes)
   if (dryRun) args.push("--dry-run")
   return args
 }
@@ -206,14 +218,17 @@ export function workEntryArguments(entry, dryRun, { activityEntry = false } = {}
 
 export function aggregateArguments({ from, to, project, task }) {
   const args = ["aggregate", from, to]
-  if (project) args.push("--project", project)
-  if (task) args.push("--task", task)
+  const normalizedProject = trimOptionalString(project)
+  const normalizedTask = trimOptionalString(task)
+  if (normalizedProject) args.push("--project", normalizedProject)
+  if (normalizedTask) args.push("--task", normalizedTask)
   return args
 }
 
 export function timesheetArguments({ date, project, task }) {
-  const args = ["timesheet", date, "--project", project]
-  if (task) args.push("--task", task)
+  const args = ["timesheet", date, "--project", project.trim()]
+  const normalizedTask = trimOptionalString(task)
+  if (normalizedTask) args.push("--task", normalizedTask)
   return args
 }
 
@@ -301,9 +316,9 @@ export function createProjectTimeTransformTool(
   const parameters = {
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-    repositoryId: z.string().trim().min(1).optional(),
-    project: z.string().trim().min(1).optional(),
-    sourceKind: z.string().trim().min(1).optional(),
+    repositoryId: nonBlankString(z).optional(),
+    project: nonBlankString(z).optional(),
+    sourceKind: nonBlankString(z).optional(),
   }
   if (!record) parameters.applyMappings = z.boolean().optional()
 
@@ -315,8 +330,12 @@ export function createProjectTimeTransformTool(
     parameters: z.object(parameters),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       try {
+        const { repositoryId, project, sourceKind, ...request } = params
         const plan = await loadTransform({
-          ...params,
+          ...request,
+          repositoryId: trimOptionalString(repositoryId),
+          project: trimOptionalString(project),
+          sourceKind: trimOptionalString(sourceKind),
           applyMappings: record || params.applyMappings === true,
           mappings: parseProjectTimeMappings(projectTimeMappings),
           logPath: projectTimeLogPath || undefined,
@@ -368,7 +387,7 @@ export function createProjectTimeMappingReviewTool(z, { command = "harvest-workl
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       approvals: z.array(z.object({
-        sourceProject: z.string().trim().min(1),
+        sourceProject: nonBlankString(z),
         projectId: z.number().int().positive(),
         taskId: z.number().int().positive(),
       })).optional(),
@@ -383,7 +402,8 @@ export function createProjectTimeMappingReviewTool(z, { command = "harvest-workl
         if (result.spawnError) throw result.spawnError
         if (result.code !== 0) throw new Error(result.stderr.trim() || `${command} exited with ${result.code}`)
         const analysis = inferProjectTimeMappings(plan, JSON.parse(result.stdout))
-        const output = params.approvals ? { analysis, projectTimeMappings: approvedProjectTimeMappings(analysis, params.approvals) } : analysis
+        const approvals = params.approvals?.map(approval => ({ ...approval, sourceProject: approval.sourceProject.trim() }))
+        const output = approvals ? { analysis, projectTimeMappings: approvedProjectTimeMappings(analysis, approvals) } : analysis
         return { content: [{ type: "text", text: JSON.stringify(output) }], details: output }
       } catch (error) {
         const output = { error: error.message }
@@ -403,8 +423,8 @@ export function createTimeAggregateTool(z, { command = "harvest-worklog", run = 
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      project: z.string().trim().min(1).optional(),
-      task: z.string().trim().min(1).optional(),
+      project: nonBlankString(z).optional(),
+      task: nonBlankString(z).optional(),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const args = aggregateArguments(params)
@@ -436,8 +456,8 @@ export function createTimesheetTool(z, { command = "harvest-worklog", run = runC
     approval: "read",
     parameters: z.object({
       date: z.string().regex(DATE_PATTERN, "must be today, yesterday, or an ISO date"),
-      project: z.string().trim().min(1),
-      task: z.string().trim().min(1).optional(),
+      project: nonBlankString(z),
+      task: nonBlankString(z).optional(),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const args = timesheetArguments(params)
@@ -477,13 +497,13 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      project: z.string().trim().min(1).optional(),
-      task: z.string().trim().min(1).optional(),
+      project: nonBlankString(z).optional(),
+      task: nonBlankString(z).optional(),
       projectId: z.number().int().positive().optional(),
       taskId: z.number().int().positive().optional(),
       hours: z.number().positive().optional(),
-      notes: z.string().trim().min(1).optional(),
-      holidayRegions: z.array(z.string().trim().min(1)).optional(),
+      notes: nonBlankString(z).optional(),
+      holidayRegions: z.array(nonBlankString(z)).optional(),
       dryRun: z.boolean().optional(),
     })
       .refine(hasValidAssignment, { message: "supply project and task, or projectId and taskId, but not both" })
