@@ -145,4 +145,4 @@ npm run verify:release
 harvest-worklog --help
 ```
 
-`npm run release` owns the uninstall/force-install mutation. `npm run verify:release` never changes the installation: it checks the exact installed version and runs a deterministic slash-command smoke test against the installed plugin. It exits after verification. Existing OMP sessions retain startup-loaded extension code; restart them before optional manual autocomplete and slash-command QA.
+`npm run release` owns the uninstall/force-install mutation. `npm run verify:release` never changes the installation: it checks the installed package version, resolved Git revision, and plugin path before running a deterministic slash-command smoke test against the installed plugin. It exits after verification. Existing OMP sessions retain startup-loaded extension code; restart them before optional manual autocomplete and slash-command QA.
