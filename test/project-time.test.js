@@ -1,11 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
 
 import { createProjectTimeTool, createProjectTimeTransformTool } from "../index.js"
-import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
-
-const narrativeFixtures = JSON.parse(await readFile(new URL("./fixtures/narrative-worklog-scenarios.json", import.meta.url), "utf8"))
+import { approvedProjectTimeMappings, formatProjectTimeEntryDrafts, inferProjectTimeMappings, loadProjectTimeEntries, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const schema = () => ({
   regex() { return this },
@@ -21,6 +18,8 @@ const z = {
   boolean: schema,
   object: shape => shape,
 }
+
+const evidenceState = entries => ({ format: "omp-project-time/evidence", version: 1, entries })
 
 test("normalizes and validates Project Time mapping settings", () => {
   assert.deepEqual([...parseProjectTimeMappings(" ")], [])
@@ -41,355 +40,28 @@ test("normalizes and validates Project Time mapping settings", () => {
   )
 })
 
-test("labels local activity data and separate Harvest destination", () => {
-  const plan = {
-    groups: [
-      { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Fix test suite", milliseconds: 24_040_000 },
-      { spentDate: "2026-07-20", sourceKind: "agent_turn_elapsed", activity: "Fix test suite", milliseconds: 1_789_000 },
-      { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prototype template v3 UI", milliseconds: 300_000 },
-      { spentDate: "2026-07-21", sourceKind: "human_active", activity: "Tomorrow", milliseconds: 7_200_000 },
-    ],
-  }
-
-  assert.equal(
-    formatProjectTimeTimesheet(plan, { project: "wrap", spentDate: "2026-07-20", mapping: { project: "WRAP (YG - SIS)", task: "Programming" } }),
-    "wrap · Mon, Jul 20 · 6:45:40\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivity summary\n- Fix test suite · 6:40:40\n- Prototype template v3 UI · 0:05",
-  )
+test("resolves a local Project Time date", () => {
   assert.equal(resolveProjectTimeDate("today", new Date(2026, 6, 20, 12)), "2026-07-20")
   assert.equal(resolveProjectTimeDate("yesterday", new Date(2026, 6, 20, 12)), "2026-07-19")
   assert.throws(() => resolveProjectTimeDate("2026-02-31"), /valid local date/)
-  assert.equal(
-    formatProjectTimeTimesheet({ groups: [] }, { project: "WRAP", spentDate: "2026-07-20" }),
-    "WRAP · Mon, Jul 20 · 0:00\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\nNo local Project Time sessions found for WRAP on 2026-07-20.",
-  )
 })
 
-test("renders a review-only Harvest-shaped draft grouped by suggested destinations", () => {
-  const plan = {
-    groups: [
-      { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Support workflow", milliseconds: 7_200_000 },
-      { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Fix tests", milliseconds: 3_600_000 },
-      { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Support QA", milliseconds: 1_800_000 },
-    ],
-  }
-  assert.equal(
-    formatProjectTimeTimesheet(plan, {
-      project: "wrap",
-      spentDate: "2026-07-20",
-      categories: new Map([
-        ["Support workflow", "WRAP Support / Support"],
-        ["Fix tests", "WRAP / Programming"],
-        ["Support QA", "WRAP Support / Support"],
-      ]),
-      workstreams: new Map([
-        ["Support workflow", "Workflow support"],
-        ["Fix tests", "Feature delivery"],
-        ["Support QA", "Workflow support"],
-      ]),
-      harvestAssignments: [
-        { project: { name: "WRAP Support" }, task: { name: "Support" } },
-        { project: { name: "WRAP" }, task: { name: "Programming" } },
-      ],
-    }),
-    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Workflow support · 2:30\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 2:30\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 3:30",
-  )
-})
-
-test("keeps identical workstreams separate across Harvest destinations", () => {
-  assert.equal(
-    formatProjectTimeTimesheet(
-      {
-        groups: [
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build support", milliseconds: 3_600_000 },
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build product", milliseconds: 3_600_000 },
-        ],
-      },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        categories: new Map([
-          ["Build support", "WRAP Support / Support"],
-          ["Build product", "WRAP / Programming"],
-        ]),
-        workstreams: new Map([
-          ["Build support", "Feature delivery"],
-          ["Build product", "Feature delivery"],
-        ]),
-        harvestAssignments: [
-          { project: { name: "WRAP Support" }, task: { name: "Support" } },
-          { project: { name: "WRAP" }, task: { name: "Programming" } },
-        ],
-      },
-    ),
-    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 2:00",
-  )
-})
-
-test("keeps activities visible when no Harvest destination is configured", () => {
-  assert.equal(
-    formatProjectTimeTimesheet(
-      { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Unassigned work", milliseconds: 1_200_000 }] },
-      { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] },
-    ),
-    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Unassigned work · 0:20\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:20\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:20",
-  )
-})
-test("renders bounded worklog fallback for unmapped activities", () => {
-  assert.equal(
-    formatProjectTimeTimesheet(
-      {
-        groups: [
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt one", milliseconds: 1_800_000 },
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt two", milliseconds: 1_800_000 },
-        ],
-      },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        harvestAssignments: [],
-        summary: "- Investigated the scheduler issue.\n- Improved the workflow tooling.",
-      },
-    ),
-    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Prompt one · 0:30\n- Prompt two · 0:30\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 1:00\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 1:00",
-  )
-})
-test("renders durations for unmapped workstreams", () => {
-  assert.match(
-    formatProjectTimeTimesheet(
-      {
-        groups: [
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt one", milliseconds: 1_800_000 },
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Prompt two", milliseconds: 1_200_000 },
-        ],
-      },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        categories: new Map([
-          ["Prompt one", null],
-          ["Prompt two", null],
-        ]),
-        workstreams: new Map([
-          ["Prompt one", "Feature delivery"],
-          ["Prompt two", "Feature delivery"],
-        ]),
-        mapping: { project: "WRAP", task: "Programming" },
-        harvestAssignments: [],
-      },
-    ),
-    /Unmapped local work \(not submittable\)[\s\S]*- Feature delivery · 0:50[\s\S]*Local total: 0:50/,
-  )
-})
-test("bounds raw unmapped activity fallback", () => {
-  const groups = ["A", "B", "C", "D", "E"].map((activity, index) => ({
-    spentDate: "2026-07-20",
-    sourceKind: "human_active",
-    activity,
-    milliseconds: (index + 1) * 60_000,
-  }))
-  assert.equal(
-    formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] }),
-    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:15\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:15",
-  )
-})
-test("renders source narratives as mapped notes", () => {
-  assert.equal(
-    formatProjectTimeTimesheet(
-      {
-        groups: [
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Implement validation", milliseconds: 1_800_000 },
-          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Review validation", milliseconds: 600_000 },
-        ],
-      },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        categories: new Map([
-          ["Implement validation", "WRAP / Programming"],
-          ["Review validation", "WRAP / Programming"],
-        ]),
-        workstreams: new Map([
-          ["Implement validation", "Validation"],
-          ["Review validation", "Validation"],
-        ]),
-        summaryRecords: [
-          { activity: "Implement validation", narrative: "Implemented validation for the workflow form." },
-          { activity: "Review validation" },
-        ],
-        harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
-      },
-    ),
-    "wrap · Mon, Jul 20 · 0:40\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Validation · 0:40\nNotes (source narrative; review before submitting)\n- Implemented validation for the workflow form.\nDuration: 0:40\n\nTotal: 0:40",
-  )
-})
-test("bounds mapped activity grouping and reconciles its duration", () => {
-  const groups = ["A", "B", "C", "D", "E"].map(activity => ({
-    spentDate: "2026-07-20",
-    sourceKind: "human_active",
-    activity,
-    milliseconds: 90_000,
-  }))
-  const output = formatProjectTimeTimesheet(
-    { groups },
-    {
-      project: "wrap",
-      spentDate: "2026-07-20",
-      categories: new Map(groups.map(group => [group.activity, "WRAP / Programming"])),
-      harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
-    },
-  )
-  assert.match(output, /Activity grouping\n- A · 0:01:30\n- B · 0:01:30\n- C · 0:01:30\n- D · 0:01:30\n- 1 other local activities · 0:01:30[\s\S]*Duration: 0:07:30[\s\S]*Total: 0:07:30/)
-})
-
-
-test("preserves exact durations across split destinations", () => {
-  const output = formatProjectTimeTimesheet(
-    {
-      groups: [
-        { spentDate: "2026-07-20", sourceKind: "human_active", activity: "First", milliseconds: 1_830_000 },
-        { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Second", milliseconds: 1_830_000 },
-      ],
-    },
-    {
-      project: "wrap",
-      spentDate: "2026-07-20",
-      categories: new Map([
-        ["First", "WRAP A / Programming"],
-        ["Second", "WRAP B / Programming"],
-      ]),
-      harvestAssignments: [
-        { project: { name: "WRAP A" }, task: { name: "Programming" } },
-        { project: { name: "WRAP B" }, task: { name: "Programming" } },
-      ],
-    },
-  )
-  assert.match(output, /WRAP A[\s\S]*Duration: 0:30:30[\s\S]*WRAP B[\s\S]*Duration: 0:30:30[\s\S]*Total: 1:01/)
-})
-
-
-test("keeps configured destinations when Harvest category lookup fails", () => {
-  assert.match(
-    formatProjectTimeTimesheet(
-      { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Configured work", milliseconds: 1_200_000 }] },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        mapping: { project: "WRAP", task: "Programming" },
-        harvestAssignments: [],
-        harvestError: "Harvest unavailable",
-      },
-    ),
-    /Harvest categories unavailable[\s\S]*Project: WRAP[\s\S]*Task: Programming[\s\S]*- Configured work[\s\S]*Duration: 0:20[\s\S]*Total: 0:20/,
-  )
-})
-test("sums exact local durations within AI activity categories", () => {
-  const groups = [
-    { activity: "Validate workflow", milliseconds: 1_200_000 },
-    { activity: "Fix validation test", milliseconds: 600_000 },
-    { activity: "Review policy", milliseconds: 900_000 },
-  ].map(group => ({ ...group, spentDate: "2026-07-20", sourceKind: "human_active" }))
-
-  assert.equal(
-    formatProjectTimeTimesheet(
-      { groups },
-      {
-        project: "wrap",
-        spentDate: "2026-07-20",
-        categories: new Map([
-          ["Validate workflow", "Validation"],
-          ["Fix validation test", "Validation"],
-          ["Review policy", "Review"],
-        ]),
-      },
-    ),
-    "wrap · Mon, Jul 20 · 0:45\nSource: local OMP Project Time (not Harvest)\n\nAI activity summary (from local records)\n- Validation · 0:30\n- Review · 0:15",
-  )
-})
 
 test("lists unique human-active local Project Time names", () => {
   assert.deepEqual(
-    projectTimeProjectNames({
-      entries: [
-        { sourceKind: "human_active", project: "wrap" },
-        { sourceKind: "agent_turn_elapsed", project: "ignored" },
-        { sourceKind: "human_active", project: "Ice Fog Analytics" },
-        { sourceKind: "human_active", project: "wrap" },
-        { sourceKind: "human_active", project: " " },
-      ],
-    }),
+    projectTimeProjectNames(evidenceState([
+      { sourceKind: "human_active", project: "wrap" },
+      { sourceKind: "agent_turn_elapsed", project: "ignored" },
+      { sourceKind: "human_active", project: "Ice Fog Analytics" },
+      { sourceKind: "human_active", project: "wrap" },
+      { sourceKind: "human_active", project: " " },
+    ])),
     ["Ice Fog Analytics", "wrap"],
   )
 })
 
-test("renders a generated worklog draft separately from local activity totals", () => {
-  assert.equal(
-    formatProjectTimeTimesheet(
-      { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Build", milliseconds: 1_800_000 }] },
-      { project: "wrap", spentDate: "2026-07-20", summary: "- Implemented the selected local change." },
-    ),
-    "wrap · Mon, Jul 20 · 0:30\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\n- Build · 0:30\n\nWorklog draft (generated from local records)\n- Implemented the selected local change.",
-  )
-})
 
-test("keeps summary records within the requested repository", () => {
-  const state = {
-    entries: [
-      { sourceKind: "human_active", project: "wrap", repositoryId: "current", activity: "Included", startAtMs: new Date(2026, 6, 20, 9).getTime(), endAtMs: new Date(2026, 6, 20, 9, 30).getTime() },
-      { sourceKind: "human_active", project: "wrap", repositoryId: "other", activity: "Excluded", startAtMs: new Date(2026, 6, 20, 10).getTime(), endAtMs: new Date(2026, 6, 20, 10, 30).getTime() },
-    ],
-  }
-  assert.deepEqual(
-    projectTimeSummaryRecords(state, { from: "2026-07-20", to: "2026-07-20", project: "wrap", repositoryId: "current" }),
-    [{ activity: "Included", durationMilliseconds: 1_800_000 }],
-  )
-})
 
-test("summarizes local activities by duration and reports the omitted remainder", () => {
-  const groups = [
-    { activity: "Build", milliseconds: 1_200_000 },
-    { activity: "Build", milliseconds: 600_000 },
-    { activity: "Review", milliseconds: 900_000 },
-    { activity: "Test", milliseconds: 600_000 },
-    { activity: "Document", milliseconds: 300_000 },
-    { activity: "Release", milliseconds: 180_000 },
-    { activity: "Triage", milliseconds: 120_000 },
-  ].map(group => ({ ...group, spentDate: "2026-07-20", sourceKind: "human_active" }))
-
-  assert.equal(
-    formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20" }),
-    "wrap · Mon, Jul 20 · 1:05\nSource: local OMP Project Time (not Harvest)\n\nActivity summary\n- Build · 0:30\n- Review · 0:15\n- Test · 0:10\n- Document · 0:05\n- Release · 0:03\n- 1 other activity · 0:02",
-  )
-})
-
-test("renders synthetic narrative worklog fixtures", () => {
-  for (const scenario of narrativeFixtures.scenarios.filter(scenario => scenario.expectedLegacy)) {
-    assert.equal(
-      formatProjectTimeTimesheet({ groups: scenario.groups }, scenario),
-      scenario.expectedLegacy,
-      scenario.id,
-    )
-  }
-})
-
-test("keeps future narrative fixture expectations explicit", () => {
-  const scenarios = Object.fromEntries(narrativeFixtures.scenarios.map(scenario => [scenario.id, scenario]))
-
-  assert.deepEqual(
-    scenarios["multi-topic-programming"].expectedNarrativesForFutureSchema,
-    [
-      "Implemented validation for a configurable workflow and covered invalid-state errors.",
-      "Built an approval panel and simplified the supporting form flow.",
-      "Fixed flaky integration checks and documented a deployment safeguard.",
-    ],
-  )
-  assert.deepEqual(
-    scenarios["deduplicate-identical-narrative"].expectedNarrativesForFutureSchema,
-    ["Generated: Investigated and stabilized an intermittent integration check."],
-  )
-  assert.deepEqual(scenarios["mixed-task-day"].expectedTaskGroups, ["Meeting", "Programming"])
-  assert.equal(scenarios["generic-activity-fallback"].groups[0].activity, "unlabelled")
-  assert.equal(scenarios["missing-activity-fallback"].groups[0].activity, "")
-})
 
 test("infers reviewed Harvest mapping candidates deterministically", () => {
   const analysis = inferProjectTimeMappings(
@@ -456,10 +128,10 @@ test("maps and splits Project Time sessions by local Harvest date", () => {
   const endAtMs = new Date(2026, 6, 18, 1, 30).getTime()
 
   const plan = projectTimeEntries(
-    { entries: [
+    evidenceState([
       { project: "Harvest API", repositoryId: "klondikemarlen/harvest-api-v2", sourceKind: "human_active", startAtMs, endAtMs },
       { project: "Harvest API", repositoryId: "klondikemarlen/harvest-api-v2", sourceKind: "agent_turn_elapsed", startAtMs, endAtMs: endAtMs + 3_600_000 },
-    ] },
+    ]),
     mappings,
     { from: "2026-07-17", to: "2026-07-18" },
   )
@@ -476,13 +148,77 @@ test("maps and splits Project Time sessions by local Harvest date", () => {
   assert.match(plan.entries[0].notes, /Harvest API \(klondikemarlen\/harvest-api-v2\)/)
 })
 
+test("preserves versioned source evidence while leaving unassigned and ambiguous work unmapped", () => {
+  const startAtMs = new Date(2026, 6, 17, 9).getTime()
+  const source = (id, workItemAttribution, workItem, narrative) => ({
+    id,
+    sourceKind: "human_active",
+    project: "wrap",
+    repositoryId: "repository-id",
+    repositoryIdentity: "github.com/klondikemarlen/wrap",
+    activity: "Review",
+    workItemAttribution,
+    ...(workItem === undefined ? {} : { workItem }),
+    ...(narrative === undefined ? {} : { narrative }),
+    startAtMs,
+    endAtMs: startAtMs + 1_800_000,
+    createdAtMs: startAtMs + 1_800_000,
+  })
+  const workItem = { kind: "issue", number: 91, repository: "klondikemarlen/harvest-worklog", source: "user_provided" }
+  const plan = projectTimeTransform(
+    evidenceState([
+      source("entry-explicit", "explicit_prompt", workItem, { text: "Validated the versioned evidence contract.", source: "generated" }),
+      source("entry-carried", "carried_forward", workItem),
+      source("entry-unassigned", "unassigned"),
+      source("entry-ambiguous", "ambiguous"),
+    ]),
+    parseProjectTimeMappings({ wrap: { project: "WRAP", task: "Programming" } }),
+    { from: "2026-07-17", to: "2026-07-17", applyMappings: true },
+  )
+
+  assert.deepEqual(
+    plan.entries[0].sources.map(({ id, sourceKind, project, repositoryId, repositoryIdentity, startAtMs, endAtMs, createdAtMs, narrative, workItem, workItemAttribution }) => ({ id, sourceKind, project, repositoryId, repositoryIdentity, startAtMs, endAtMs, createdAtMs, narrative, workItem, workItemAttribution })),
+    [
+      { id: "entry-carried", sourceKind: "human_active", project: "wrap", repositoryId: "repository-id", repositoryIdentity: "github.com/klondikemarlen/wrap", startAtMs, endAtMs: startAtMs + 1_800_000, createdAtMs: startAtMs + 1_800_000, narrative: undefined, workItem, workItemAttribution: "carried_forward" },
+      { id: "entry-explicit", sourceKind: "human_active", project: "wrap", repositoryId: "repository-id", repositoryIdentity: "github.com/klondikemarlen/wrap", startAtMs, endAtMs: startAtMs + 1_800_000, createdAtMs: startAtMs + 1_800_000, narrative: { text: "Validated the versioned evidence contract.", source: "generated" }, workItem, workItemAttribution: "explicit_prompt" },
+    ],
+  )
+  assert.deepEqual(plan.unmapped.map(entry => [entry.reason, entry.sources.map(source => source.id)]), [
+    ["ambiguous_work_item", ["entry-ambiguous"]],
+    ["unassigned_work_item", ["entry-unassigned"]],
+  ])
+  const draft = formatProjectTimeEntryDrafts(plan)
+  assert.match(draft, /source entry-explicit; source kind human_active; repository github\.com\/klondikemarlen\/wrap; task explicit_prompt issue #91 \(klondikemarlen\/harvest-worklog\); interval 2026-07-17T\d{2}:00:00\.000Z–2026-07-17T\d{2}:30:00\.000Z/)
+  assert.match(draft, /Narrative evidence \(review only\): Validated the versioned evidence contract\./)
+  assert.match(draft, /Unmapped automatic evidence \(not submittable\)[\s\S]*task ambiguous[\s\S]*ambiguous_work_item[\s\S]*task unassigned[\s\S]*unassigned_work_item/)
+})
+
+test("rejects unsupported Project Time evidence before a dry-run preflight", async () => {
+  const calls = []
+  const preview = createProjectTimeTool(z, {
+    loadEntries: options => loadProjectTimeEntries({
+      ...options,
+      read: async () => JSON.stringify({ format: "omp-project-time/evidence", version: "1", entries: [] }),
+    }),
+    run: async (...args) => {
+      calls.push(args)
+      return { code: 0, stdout: "", stderr: "" }
+    },
+  })
+
+  const result = await preview.execute("call-1", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
+
+  assert.match(result.content[0].text, /Unsupported OMP Project Time evidence format/)
+  assert.deepEqual(calls, [])
+})
+
 test("aggregates mapped sources before ordinary import", () => {
   const at = hour => new Date(2026, 6, 17, hour).getTime()
   const plan = projectTimeEntries(
-    { entries: [
+    evidenceState([
       { project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", startAtMs: at(9), endAtMs: at(10) },
       { project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", startAtMs: at(10), endAtMs: at(11) },
-    ] },
+    ]),
     parseProjectTimeMappings(JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } })),
     { from: "2026-07-17", to: "2026-07-17" },
   )
@@ -535,16 +271,14 @@ test("filters, groups, maps, and reports Project Time transforms deterministical
   const mappings = parseProjectTimeMappings(JSON.stringify({
     "Harvest API": { project: "Internal", task: "Development" },
   }))
-  const state = {
-    entries: [
-      { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "implementation", startAtMs: at(9), endAtMs: at(9, 30) },
-      { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "implementation", startAtMs: at(10), endAtMs: at(10, 30) },
-      { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", startAtMs: at(11), endAtMs: at(11, 15) },
-      { project: "Other", repositoryId: "repo", sourceKind: "human_active", activity: "review", startAtMs: at(12), endAtMs: at(12, 30) },
-      { project: "Harvest API", repositoryId: "repo", sourceKind: "idle", activity: "implementation", startAtMs: at(13), endAtMs: at(13, 30) },
-      { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "invalid", startAtMs: at(14), endAtMs: at(14) },
-    ],
-  }
+  const state = evidenceState([
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "implementation", startAtMs: at(9), endAtMs: at(9, 30) },
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "implementation", startAtMs: at(10), endAtMs: at(10, 30) },
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", startAtMs: at(11), endAtMs: at(11, 15) },
+    { project: "Other", repositoryId: "repo", sourceKind: "human_active", activity: "review", startAtMs: at(12), endAtMs: at(12, 30) },
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "idle", activity: "implementation", startAtMs: at(13), endAtMs: at(13, 30) },
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "invalid", startAtMs: at(14), endAtMs: at(14) },
+  ])
   const options = {
     from: "2026-07-17",
     to: "2026-07-17",
@@ -581,7 +315,7 @@ test("filters, groups, maps, and reports Project Time transforms deterministical
 test("defaults transforms to human-active intervals", () => {
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
   const mappings = parseProjectTimeMappings({ "Harvest API": { project: "Internal", task: "Development" } })
-  const state = { entries: [{ project: "Harvest API", repositoryId: "repo", sourceKind: "agent_turn_elapsed", activity: "implementation", startAtMs, endAtMs: startAtMs + 3_600_000 }] }
+  const state = evidenceState([{ project: "Harvest API", repositoryId: "repo", sourceKind: "agent_turn_elapsed", activity: "implementation", startAtMs, endAtMs: startAtMs + 3_600_000 }])
   const defaultPlan = projectTimeTransform(
     state,
     mappings,
@@ -635,16 +369,14 @@ test("previews JSON transforms without writing activity entries", async () => {
 test("does not propose activity groups that round to zero Harvest hours", () => {
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
   const plan = projectTimeTransform(
-    {
-      entries: [{
-        project: "Harvest API",
-        repositoryId: "repo",
-        sourceKind: "human_active",
-        activity: "implementation",
-        startAtMs,
-        endAtMs: startAtMs + 10_000,
-      }],
-    },
+    evidenceState([{
+      project: "Harvest API",
+      repositoryId: "repo",
+      sourceKind: "human_active",
+      activity: "implementation",
+      startAtMs,
+      endAtMs: startAtMs + 10_000,
+    }]),
     parseProjectTimeMappings({ "Harvest API": { project: "Internal", task: "Development" } }),
     { from: "2026-07-17", to: "2026-07-17", applyMappings: true },
   )

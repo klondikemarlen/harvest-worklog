@@ -3,6 +3,18 @@ import { homedir } from "node:os"
 import path from "node:path"
 
 const HOUR_MS = 60 * 60 * 1000
+const PROJECT_TIME_EVIDENCE_FORMAT = "omp-project-time/evidence"
+const PROJECT_TIME_EVIDENCE_VERSION = 1
+
+function projectTimeEvidenceEntries(state) {
+  if (!state || typeof state !== "object" || Array.isArray(state) || !Array.isArray(state.entries)) {
+    throw new Error("OMP Project Time evidence must include an entries array")
+  }
+  if (state.format !== PROJECT_TIME_EVIDENCE_FORMAT || state.version !== PROJECT_TIME_EVIDENCE_VERSION) {
+    throw new Error(`Unsupported OMP Project Time evidence format; expected ${PROJECT_TIME_EVIDENCE_FORMAT} v${PROJECT_TIME_EVIDENCE_VERSION}`)
+  }
+  return state.entries
+}
 
 export function defaultProjectTimeLogPath() {
   return path.join(homedir(), ".omp", "project-time", "time-log.json")
@@ -125,26 +137,23 @@ function matchesHarvestAssignment(entry, assignment) {
 }
 
 export function projectTimeProjectNames(state) {
-  if (!state || !Array.isArray(state.entries)) {
-    throw new Error("OMP Project Time log is missing an entries array")
-  }
-
-  return [...new Set(state.entries
+  return [...new Set(projectTimeEvidenceEntries(state)
     .filter(session => session?.sourceKind === "human_active" && typeof session.project === "string" && session.project.trim().length > 0)
     .map(session => session.project))]
     .sort((left, right) => left.localeCompare(right))
 }
 
 export function projectTimeEntries(state, mappings, { from, to }) {
-  if (!state || !Array.isArray(state.entries)) {
-    throw new Error("OMP Project Time log is missing an entries array")
-  }
-
+  const entries = projectTimeEvidenceEntries(state)
   const grouped = new Map()
   let unmapped = 0
 
-  for (const session of state.entries) {
+  for (const session of entries) {
     if (session.sourceKind !== "human_active") continue
+    if (session.workItemAttribution === "unassigned" || session.workItemAttribution === "ambiguous") {
+      unmapped += 1
+      continue
+    }
     const mapping = mappings.get(session.project)
     if (!mapping) {
       unmapped += 1
@@ -200,9 +209,7 @@ export function projectTimeTransform(
     applyMappings = false,
   },
 ) {
-  if (!state || !Array.isArray(state.entries)) {
-    throw new Error("OMP Project Time log is missing an entries array")
-  }
+  const entries = projectTimeEvidenceEntries(state)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) {
     throw new Error("from and to must be an inclusive ISO date range")
   }
@@ -210,13 +217,12 @@ export function projectTimeTransform(
   const grouped = new Map()
   const excluded = []
 
-  for (const session of state.entries) {
+  for (const session of entries) {
     const row = sessionRow(session)
     if (!session || !Number.isFinite(session.startAtMs) || !Number.isFinite(session.endAtMs) || session.startAtMs >= session.endAtMs) {
       excluded.push({ ...row, reason: "invalid_interval" })
       continue
     }
-
 
     const reasons = []
     if (repositoryId !== undefined && session.repositoryId !== repositoryId) reasons.push("repository_id")
@@ -235,17 +241,23 @@ export function projectTimeTransform(
       const segmentEnd = Math.min(session.endAtMs, new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime())
 
       if (spentDate >= from && spentDate <= to) {
-        const activity = typeof session.activity === "string" && session.activity.length > 0 ? session.activity : "unlabelled"
-        const key = JSON.stringify([spentDate, session.repositoryId, session.project, session.sourceKind ?? null, activity])
+        const source = projectTimeEvidenceSegment(session, spentDate, cursor, segmentEnd)
+        const activity = source.activity ?? "unlabelled"
+        const key = JSON.stringify([spentDate, source.repositoryId, source.project, source.sourceKind, activity, source.workItemAttribution ?? null, source.workItem?.kind ?? null, source.workItem?.number ?? null, source.workItem?.repository ?? null])
         const entry = grouped.get(key) ?? {
           spentDate,
-          repositoryId: session.repositoryId ?? null,
-          project: session.project ?? null,
-          sourceKind: session.sourceKind ?? null,
+          repositoryId: source.repositoryId,
+          ...(source.repositoryIdentity === undefined ? {} : { repositoryIdentity: source.repositoryIdentity }),
+          project: source.project,
+          sourceKind: source.sourceKind,
           activity,
+          ...(source.workItem === undefined ? {} : { workItem: source.workItem }),
+          ...(source.workItemAttribution === undefined ? {} : { workItemAttribution: source.workItemAttribution }),
+          sources: [],
           milliseconds: 0,
         }
-        entry.milliseconds += segmentEnd - cursor
+        entry.milliseconds += source.milliseconds
+        entry.sources.push(source)
         grouped.set(key, entry)
         included = true
       }
@@ -255,46 +267,24 @@ export function projectTimeTransform(
   }
 
   const groups = [...grouped.values()]
-    .map(entry => ({ ...entry, hours: displayHours(entry.milliseconds), harvest: null }))
+    .map(entry => ({ ...entry, sources: entry.sources.sort(compareEvidenceSources), hours: displayHours(entry.milliseconds), harvest: null }))
     .sort(compareGroups)
   const unmapped = []
-  const entries = applyMappings ? mappedEntries(groups, mappings, unmapped) : []
+  const mapped = applyMappings ? mappedEntries(groups, mappings, unmapped) : []
 
   return {
     sourceKind,
     groups,
-    entries,
+    entries: mapped,
     unmapped: unmapped.sort(compareGroups),
     excluded: excluded.sort(compareRows),
   }
 }
 
-export function projectTimeSummaryRecords(state, { from, to, repositoryId, project }) {
-  const records = []
-  for (const session of state.entries) {
-    if (session.sourceKind !== "human_active" || session.project !== project || (repositoryId !== undefined && session.repositoryId !== repositoryId) || !Number.isFinite(session.startAtMs) || !Number.isFinite(session.endAtMs) || session.startAtMs >= session.endAtMs) continue
-
-    let cursor = session.startAtMs
-    while (cursor < session.endAtMs) {
-      const date = new Date(cursor)
-      const spentDate = localDate(date)
-      const segmentEnd = Math.min(session.endAtMs, new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime())
-      if (spentDate >= from && spentDate <= to) {
-        records.push({
-          activity: typeof session.activity === "string" && session.activity.length > 0 ? session.activity : "unlabelled",
-          durationMilliseconds: segmentEnd - cursor,
-          ...(typeof session.narrative?.text === "string" ? { narrative: session.narrative.text } : {}),
-        })
-      }
-      cursor = segmentEnd
-    }
-  }
-  return records
-}
 
 export async function loadProjectTimeTransform({ from, to, repositoryId, project, sourceKind, applyMappings, mappings, logPath = defaultProjectTimeLogPath(), read = readFile }) {
   const state = JSON.parse(await read(logPath, "utf8"))
-  return { ...projectTimeTransform(state, mappings, { from, to, repositoryId, project, sourceKind, applyMappings }), summaryRecords: projectTimeSummaryRecords(state, { from, to, repositoryId, project }) }
+  return projectTimeTransform(state, mappings, { from, to, repositoryId, project, sourceKind, applyMappings })
 }
 
 export function resolveProjectTimeDate(value, today = new Date()) {
@@ -315,151 +305,6 @@ export function resolveProjectTimeDate(value, today = new Date()) {
   }
   return value
 }
-export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, workstreams, summary, summaryRecords, harvestAssignments, harvestError }) {
-  const [year, month, day] = spentDate.split("-").map(Number)
-  const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
-  const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatExactDuration(groups.reduce((total, group) => total + group.milliseconds, 0))}`
-  const provenance = [
-    "Source: local OMP Project Time (not Harvest)",
-    ...(harvestAssignments === undefined && mapping ? [`Harvest destination: ${mapping.project} / ${mapping.task}`] : []),
-  ]
-  if (harvestAssignments !== undefined) {
-    return formatHarvestDraft(heading, provenance, groups, {
-      categories,
-      workstreams,
-      summaryRecords,
-      harvestAssignments,
-      harvestError,
-      mapping,
-      project,
-      spentDate,
-    })
-  }
-
-  const activities = new Map()
-  for (const group of groups) {
-    const activity = group.activity || "Unlabelled"
-    const label = categories?.get(activity) ?? activity
-    activities.set(label, (activities.get(label) ?? 0) + group.milliseconds)
-  }
-  const summaries = [...activities]
-    .map(([label, milliseconds]) => ({ label, milliseconds }))
-    .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
-  const visible = categories ? summaries : summaries.slice(0, 5)
-  const hidden = categories ? [] : summaries.slice(5)
-  const task = categories ? "AI activity summary (from local records)" : "Activity summary"
-
-  const remainder = hidden.length === 1 ? "1 other activity" : `${hidden.length} other activities`
-  if (summaries.length === 0) return [heading, ...provenance, "", task, `No local Project Time sessions found for ${project} on ${spentDate}.`].join("\n")
-  return [
-    heading,
-    ...provenance,
-    "",
-    task,
-    ...visible.map(({ label, milliseconds }) => `- ${label} · ${formatExactDuration(milliseconds)}`),
-    ...(hidden.length > 0 ? [`- ${remainder} · ${formatExactDuration(hidden.reduce((total, summary) => total + summary.milliseconds, 0))}`] : []),
-    ...(summary ? ["", "Worklog draft (generated from local records)", summary] : []),
-  ].join("\n")
-}
-function formatHarvestDraft(heading, provenance, groups, { categories, workstreams, summaryRecords, harvestAssignments, harvestError, mapping, project, spentDate }) {
-  const assignments = new Map()
-  for (const assignment of harvestAssignments) {
-    const harvestProject = assignment?.project?.name
-    const harvestTask = assignment?.task?.name
-    if (typeof harvestProject === "string" && harvestProject.trim() && typeof harvestTask === "string" && harvestTask.trim()) {
-      assignments.set(`${harvestProject} / ${harvestTask}`, { project: harvestProject, task: harvestTask })
-    }
-  }
-
-  const narratives = new Map()
-  for (const record of summaryRecords ?? []) {
-    const narrative = normalizeNote(record?.narrative)
-    if (!narrative) continue
-    const key = evidenceKey(record.activity || "Unlabelled")
-    const values = narratives.get(key) ?? []
-    if (!values.includes(narrative)) values.push(narrative)
-    narratives.set(key, values)
-  }
-
-  const aggregateWorkstreams = workstreams?.size > 0 && groups.every(group => workstreams.has(group.activity || "Unlabelled"))
-  const destinations = new Map()
-  const unmapped = new Map()
-  for (const group of groups) {
-    const activity = group.activity || "Unlabelled"
-    const category = categories?.get(activity)
-    const destination = category === null ? undefined : assignments.get(category) ?? mapping
-    const label = aggregateWorkstreams ? workstreams.get(activity) : activity
-    const bucket = destination ? destinations : unmapped
-    const key = destination ? `${destination.project} / ${destination.task}` : "unmapped"
-    const entry = bucket.get(key) ?? {
-      narratives: new Set(),
-      workstreams: new Map(),
-      milliseconds: 0,
-      ...(destination ?? {}),
-    }
-    entry.milliseconds += group.milliseconds
-    for (const narrative of narratives.get(evidenceKey(activity)) ?? []) entry.narratives.add(narrative)
-    entry.workstreams.set(label, (entry.workstreams.get(label) ?? 0) + group.milliseconds)
-    bucket.set(key, entry)
-  }
-
-  const entries = [...destinations.values(), ...unmapped.values()]
-  const sections = []
-  for (const entry of [...destinations.values()].sort(compareDraftEntries)) {
-    const workstreamEntries = [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds }))
-    const sortedWorkstreams = workstreamEntries
-      .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
-    const visibleWorkstreams = sortedWorkstreams.slice(0, 4)
-    const hiddenWorkstreams = sortedWorkstreams.slice(4)
-    const notes = [...entry.narratives].slice(0, 4)
-    sections.push(
-      `Date: ${spentDate}`,
-      `Project: ${entry.project}`,
-      `Task: ${entry.task}`,
-      "Activity grouping",
-      ...visibleWorkstreams.map(workstream => `- ${workstream.label} · ${formatExactDuration(workstream.milliseconds)}`),
-      ...(hiddenWorkstreams.length > 0
-        ? [`- ${hiddenWorkstreams.length} other local activities · ${formatExactDuration(hiddenWorkstreams.reduce((total, workstream) => total + workstream.milliseconds, 0))}`]
-        : []),
-      ...(notes.length > 0
-        ? ["Notes (source narrative; review before submitting)", ...notes.map(note => `- ${note}`)]
-        : ["Notes (required before submitting)", "- Add a factual Harvest note; local activity labels are reference only."]),
-      `Duration: ${formatExactDuration(entry.milliseconds)}`,
-    )
-  }
-  if (unmapped.size > 0) {
-    const unmappedEntries = [...unmapped.values()]
-    const labels = unmappedEntries.flatMap(entry => [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds })))
-    const visible = labels
-      .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
-      .slice(0, 4)
-    const hidden = labels.slice(4)
-    sections.push(
-      "Unmapped local work (not submittable)",
-      "Activity evidence",
-      ...visible.map(label => `- ${label.label} · ${formatExactDuration(label.milliseconds)}`),
-      ...(hidden.length > 0 ? [`- ${hidden.length} other local activities · ${formatExactDuration(hidden.reduce((total, label) => total + label.milliseconds, 0))}`] : []),
-      "Notes (required before submitting)",
-      "- Choose a Harvest project/task and add a factual note; local labels are reference only.",
-      `Local total: ${formatExactDuration(unmappedEntries.reduce((total, entry) => total + entry.milliseconds, 0))}`,
-      `Not submittable until a Harvest destination and factual note are supplied for ${project} on ${spentDate}.`,
-    )
-  }
-  if (sections.length === 0) {
-    sections.push(`No local Project Time sessions found for ${project} on ${spentDate}.`)
-  }
-
-  const totalMilliseconds = entries.reduce((sum, entry) => sum + entry.milliseconds, 0)
-  return [
-    heading,
-    ...provenance,
-    "Inferred work timesheet (review only; nothing written)",
-    ...(harvestError ? ["Harvest categories unavailable; showing local activities without inferred destinations.", `Harvest lookup: ${harvestError}`] : []),
-    "",
-    ...sections,
-    ...(totalMilliseconds > 0 ? ["", `Total: ${formatExactDuration(totalMilliseconds)}`] : []),
-  ].join("\n")
-}
 
 export function formatProjectTimeEntryDrafts(plan) {
   const drafts = new Map()
@@ -474,7 +319,7 @@ export function formatProjectTimeEntryDrafts(plan) {
     }
     draft.milliseconds += entry.milliseconds
     for (const source of entry.sources ?? []) {
-      const sourceKey = JSON.stringify([source.spentDate, source.project, source.repositoryId, source.sourceKind, source.activity])
+      const sourceKey = source.id ?? JSON.stringify([source.spentDate, source.project, source.repositoryId, source.sourceKind, source.activity])
       const aggregate = draft.sources.get(sourceKey) ?? { ...source, milliseconds: 0 }
       aggregate.milliseconds += source.milliseconds
       draft.sources.set(sourceKey, aggregate)
@@ -500,14 +345,14 @@ export function formatProjectTimeEntryDrafts(plan) {
   if (unmapped.length > 0) {
     sections.push([
       "Unmapped automatic evidence (not submittable)",
-      ...unmapped.map(formatDraftEvidence),
+      ...unmapped.flatMap(entry => entry.sources?.length > 0 ? entry.sources.map(source => ({ ...source, reason: entry.reason })) : [entry]).sort(compareEvidenceSources).map(formatDraftEvidence),
     ].join("\n"))
   }
   const excluded = plan.excluded ?? []
   if (excluded.length > 0) {
     sections.push([
       "Excluded Project Time evidence",
-      ...excluded.map(entry => `- ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} (${entry.sourceKind ?? "unknown"}; ${entry.reason})`),
+      ...excluded.map(formatDraftEvidence),
     ].join("\n"))
   }
 
@@ -519,7 +364,17 @@ export function formatProjectTimeEntryDrafts(plan) {
 }
 
 function formatDraftEvidence(entry) {
-  return `- ${entry.spentDate} / ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} · ${formatExactDuration(entry.milliseconds)}`
+  const source = `- ${entry.spentDate ?? "unknown date"} / ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity ?? "unlabelled"} · ${formatExactDuration(entry.milliseconds ?? 0)}`
+  const details = [
+    ...(typeof entry.id === "string" ? [`source ${entry.id}`] : []),
+    ...(typeof entry.sourceKind === "string" ? [`source kind ${entry.sourceKind}`] : []),
+    ...(typeof entry.repositoryIdentity === "string" ? [`repository ${entry.repositoryIdentity}`] : []),
+    ...(typeof entry.workItemAttribution === "string" ? [`task ${entry.workItemAttribution}${entry.workItem ? ` ${entry.workItem.kind} #${entry.workItem.number}${entry.workItem.repository ? ` (${entry.workItem.repository})` : ""}` : ""}`] : []),
+    ...(Number.isFinite(entry.segmentStartAtMs) && Number.isFinite(entry.segmentEndAtMs) ? [`interval ${new Date(entry.segmentStartAtMs).toISOString()}–${new Date(entry.segmentEndAtMs).toISOString()}`] : []),
+    ...(typeof entry.reason === "string" ? [entry.reason] : []),
+  ]
+  const narrative = normalizeNote(entry.narrative?.text)
+  return `${source}${details.length > 0 ? ` (${details.join("; ")})` : ""}${narrative ? `\n  Narrative evidence (review only): ${narrative}` : ""}`
 }
 
 function formatExactDuration(milliseconds) {
@@ -534,18 +389,6 @@ function normalizeNote(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""
 }
 
-function evidenceKey(value) {
-  return String(value).trim().toLowerCase()
-}
-
-
-function compareDraftEntries(left, right) {
-  return right.milliseconds - left.milliseconds || String(left.project ?? "").localeCompare(String(right.project ?? "")) || String(left.task ?? "").localeCompare(String(right.task ?? ""))
-}
-
-function formatShortDate(date) {
-  return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()]}, ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()]} ${date.getDate()}`
-}
 
 function formatDayTotal(milliseconds) {
   const minutes = Math.floor(milliseconds / 60_000)
@@ -556,6 +399,10 @@ function mappedEntries(groups, mappings, unmapped) {
   const entries = new Map()
 
   for (const group of groups) {
+    if (group.workItemAttribution === "unassigned" || group.workItemAttribution === "ambiguous") {
+      unmapped.push({ ...group, reason: `${group.workItemAttribution}_work_item` })
+      continue
+    }
     const mapping = mappings.get(group.project)
     if (!mapping) {
       unmapped.push({ ...group, reason: "unmapped_project" })
@@ -573,21 +420,13 @@ function mappedEntries(groups, mappings, unmapped) {
       sources: [],
     }
     entry.milliseconds += group.milliseconds
-    entry.sources.push({
-      spentDate: group.spentDate,
-      repositoryId: group.repositoryId,
-      project: group.project,
-      sourceKind: group.sourceKind,
-      activity: group.activity,
-      milliseconds: group.milliseconds,
-      hours: group.hours,
-    })
+    entry.sources.push(...group.sources)
     entries.set(key, entry)
   }
 
   return [...entries.values()]
     .map(entry => {
-      const sources = entry.sources.sort(compareGroups)
+      const sources = entry.sources.sort(compareEvidenceSources)
       return {
         ...entry,
         hours: displayHours(entry.milliseconds),
@@ -601,12 +440,39 @@ function mappedEntries(groups, mappings, unmapped) {
 
 function sessionRow(session) {
   return {
+    id: session?.id ?? null,
     repositoryId: session?.repositoryId ?? null,
+    ...(session?.repositoryIdentity === undefined ? {} : { repositoryIdentity: session.repositoryIdentity }),
     project: session?.project ?? null,
     sourceKind: session?.sourceKind ?? null,
     activity: typeof session?.activity === "string" && session.activity.length > 0 ? session.activity : "unlabelled",
+    ...(session?.narrative === undefined ? {} : { narrative: session.narrative }),
+    ...(session?.workItem === undefined ? {} : { workItem: session.workItem }),
+    ...(session?.workItemAttribution === undefined ? {} : { workItemAttribution: session.workItemAttribution }),
     startAtMs: session?.startAtMs ?? null,
     endAtMs: session?.endAtMs ?? null,
+    createdAtMs: session?.createdAtMs ?? null,
+  }
+}
+
+function projectTimeEvidenceSegment(session, spentDate, segmentStartAtMs, segmentEndAtMs) {
+  return {
+    id: session.id,
+    spentDate,
+    sourceKind: session.sourceKind,
+    project: session.project,
+    repositoryId: session.repositoryId,
+    ...(session.repositoryIdentity === undefined ? {} : { repositoryIdentity: session.repositoryIdentity }),
+    startAtMs: session.startAtMs,
+    endAtMs: session.endAtMs,
+    segmentStartAtMs,
+    segmentEndAtMs,
+    createdAtMs: session.createdAtMs,
+    ...(typeof session.activity === "string" && session.activity.length > 0 ? { activity: session.activity } : {}),
+    ...(session.narrative === undefined ? {} : { narrative: session.narrative }),
+    ...(session.workItem === undefined ? {} : { workItem: session.workItem }),
+    ...(session.workItemAttribution === undefined ? {} : { workItemAttribution: session.workItemAttribution }),
+    milliseconds: segmentEndAtMs - segmentStartAtMs,
   }
 }
 
@@ -614,12 +480,20 @@ function displayHours(milliseconds) {
   return Math.round((milliseconds / HOUR_MS) * 100) / 100
 }
 
+function compareEvidenceSources(left, right) {
+  return String(left.spentDate).localeCompare(String(right.spentDate)) ||
+    String(left.id ?? "").localeCompare(String(right.id ?? "")) ||
+    Number(left.segmentStartAtMs ?? left.startAtMs ?? 0) - Number(right.segmentStartAtMs ?? right.startAtMs ?? 0) ||
+    Number(left.segmentEndAtMs ?? left.endAtMs ?? 0) - Number(right.segmentEndAtMs ?? right.endAtMs ?? 0)
+}
+
 function compareGroups(left, right) {
   return left.spentDate.localeCompare(right.spentDate) ||
     String(left.project).localeCompare(String(right.project)) ||
     String(left.repositoryId).localeCompare(String(right.repositoryId)) ||
     String(left.sourceKind).localeCompare(String(right.sourceKind)) ||
-    left.activity.localeCompare(right.activity)
+    left.activity.localeCompare(right.activity) ||
+    String(left.workItemAttribution ?? "").localeCompare(String(right.workItemAttribution ?? ""))
 }
 
 function compareRows(left, right) {
