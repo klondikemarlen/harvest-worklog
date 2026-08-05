@@ -611,7 +611,7 @@ test("registers against OMP's schema API and renders a review-only Harvest draft
     ["mapping-data", "2026-07-20", "2026-07-20"],
     { cwd: "/tmp" },
   ]])
-  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP (YG - SIS)\nTask: Programming\nActivity grouping\n- Project test suite · 6:40\nNotes (source narrative; review before submitting)\n- Fixed the project test suite.\nDuration: 6:40\nDate: 2026-07-20\nProject: WRAP Support (YG - SIS)\nTask: Support\nActivity grouping\n- Template v3 development · 0:05\nNotes (source narrative; review before submitting)\n- Improved the template v3 workflow.\nDuration: 0:05\n\nTotal: 6:45")
+  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45:40\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP (YG - SIS)\nTask: Programming\nActivity grouping\n- Project test suite · 6:40:40\nNotes (source narrative; review before submitting)\n- Fixed the project test suite.\nDuration: 6:40:40\nDate: 2026-07-20\nProject: WRAP Support (YG - SIS)\nTask: Support\nActivity grouping\n- Template v3 development · 0:05\nNotes (source narrative; review before submitting)\n- Improved the template v3 workflow.\nDuration: 0:05\n\nTotal: 6:45:40")
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 1)
   assert.deepEqual(

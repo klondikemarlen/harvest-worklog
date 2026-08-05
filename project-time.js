@@ -162,14 +162,15 @@ export function projectTimeEntries(state, mappings, { from, to }) {
       const segmentEnd = Math.min(session.endAtMs, nextDay)
 
       if (spentDate >= from && spentDate <= to) {
-        const key = [spentDate, mapping.project, mapping.task, session.project, session.repositoryId].join("\u0000")
+        const key = [spentDate, mapping.project, mapping.task].join("\u0000")
         const entry = grouped.get(key) ?? {
           spentDate,
           project: mapping.project,
           task: mapping.task,
-          notes: `OMP Project Time: ${session.project} (${session.repositoryId})`,
+          sources: new Set(),
           milliseconds: 0,
         }
+        entry.sources.add(`${session.project} (${session.repositoryId})`)
         entry.milliseconds += segmentEnd - cursor
         grouped.set(key, entry)
       }
@@ -180,7 +181,7 @@ export function projectTimeEntries(state, mappings, { from, to }) {
   return {
     sourceKind: "human_active",
     entries: [...grouped.values()]
-      .map(entry => ({ ...entry, hours: Math.round((entry.milliseconds / HOUR_MS) * 100) / 100 }))
+      .map(({ sources, ...entry }) => ({ ...entry, notes: `OMP Project Time: ${[...sources].sort().join("; ")}`, hours: Math.round((entry.milliseconds / HOUR_MS) * 100) / 100 }))
       .filter(entry => entry.hours > 0)
       .sort((left, right) => left.spentDate.localeCompare(right.spentDate) || left.notes.localeCompare(right.notes)),
     unmapped,
@@ -317,7 +318,7 @@ export function resolveProjectTimeDate(value, today = new Date()) {
 export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, workstreams, summary, summaryRecords, harvestAssignments, harvestError }) {
   const [year, month, day] = spentDate.split("-").map(Number)
   const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
-  const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
+  const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatExactDuration(groups.reduce((total, group) => total + group.milliseconds, 0))}`
   const provenance = [
     "Source: local OMP Project Time (not Harvest)",
     ...(harvestAssignments === undefined && mapping ? [`Harvest destination: ${mapping.project} / ${mapping.task}`] : []),
@@ -355,8 +356,8 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, 
     ...provenance,
     "",
     task,
-    ...visible.map(({ label, milliseconds }) => `- ${label} · ${formatDayTotal(milliseconds)}`),
-    ...(hidden.length > 0 ? [`- ${remainder} · ${formatDayTotal(hidden.reduce((total, summary) => total + summary.milliseconds, 0))}`] : []),
+    ...visible.map(({ label, milliseconds }) => `- ${label} · ${formatExactDuration(milliseconds)}`),
+    ...(hidden.length > 0 ? [`- ${remainder} · ${formatExactDuration(hidden.reduce((total, summary) => total + summary.milliseconds, 0))}`] : []),
     ...(summary ? ["", "Worklog draft (generated from local records)", summary] : []),
   ].join("\n")
 }
@@ -403,11 +404,9 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
   }
 
   const entries = [...destinations.values(), ...unmapped.values()]
-  const entryMinutes = allocateDisplayMinutes(entries)
   const sections = []
   for (const entry of [...destinations.values()].sort(compareDraftEntries)) {
     const workstreamEntries = [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds }))
-    const workstreamMinutes = allocateDisplayMinutes(workstreamEntries, entryMinutes.get(entry))
     const sortedWorkstreams = workstreamEntries
       .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
     const visibleWorkstreams = sortedWorkstreams.slice(0, 4)
@@ -418,21 +417,19 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
       `Project: ${entry.project}`,
       `Task: ${entry.task}`,
       "Activity grouping",
-      ...visibleWorkstreams.map(workstream => `- ${workstream.label} · ${formatMinutes(workstreamMinutes.get(workstream))}`),
+      ...visibleWorkstreams.map(workstream => `- ${workstream.label} · ${formatExactDuration(workstream.milliseconds)}`),
       ...(hiddenWorkstreams.length > 0
-        ? [`- ${hiddenWorkstreams.length} other local activities · ${formatMinutes(hiddenWorkstreams.reduce((total, workstream) => total + workstreamMinutes.get(workstream), 0))}`]
+        ? [`- ${hiddenWorkstreams.length} other local activities · ${formatExactDuration(hiddenWorkstreams.reduce((total, workstream) => total + workstream.milliseconds, 0))}`]
         : []),
       ...(notes.length > 0
         ? ["Notes (source narrative; review before submitting)", ...notes.map(note => `- ${note}`)]
         : ["Notes (required before submitting)", "- Add a factual Harvest note; local activity labels are reference only."]),
-      `Duration: ${formatMinutes(entryMinutes.get(entry))}`,
+      `Duration: ${formatExactDuration(entry.milliseconds)}`,
     )
   }
   if (unmapped.size > 0) {
     const unmappedEntries = [...unmapped.values()]
-    const unmappedEntry = unmappedEntries[0]
     const labels = unmappedEntries.flatMap(entry => [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds })))
-    const labelMinutes = allocateDisplayMinutes(labels, entryMinutes.get(unmappedEntry))
     const visible = labels
       .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
       .slice(0, 4)
@@ -440,11 +437,11 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     sections.push(
       "Unmapped local work (not submittable)",
       "Activity evidence",
-      ...visible.map(label => `- ${label.label} · ${formatMinutes(labelMinutes.get(label))}`),
-      ...(hidden.length > 0 ? [`- ${hidden.length} other local activities · ${formatMinutes(hidden.reduce((total, label) => total + labelMinutes.get(label), 0))}`] : []),
+      ...visible.map(label => `- ${label.label} · ${formatExactDuration(label.milliseconds)}`),
+      ...(hidden.length > 0 ? [`- ${hidden.length} other local activities · ${formatExactDuration(hidden.reduce((total, label) => total + label.milliseconds, 0))}`] : []),
       "Notes (required before submitting)",
       "- Choose a Harvest project/task and add a factual note; local labels are reference only.",
-      `Local total: ${formatMinutes(entryMinutes.get(unmappedEntry))}`,
+      `Local total: ${formatExactDuration(unmappedEntries.reduce((total, entry) => total + entry.milliseconds, 0))}`,
       `Not submittable until a Harvest destination and factual note are supplied for ${project} on ${spentDate}.`,
     )
   }
@@ -452,7 +449,7 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     sections.push(`No local Project Time sessions found for ${project} on ${spentDate}.`)
   }
 
-  const totalMinutes = entries.reduce((sum, entry) => sum + entryMinutes.get(entry), 0)
+  const totalMilliseconds = entries.reduce((sum, entry) => sum + entry.milliseconds, 0)
   return [
     heading,
     ...provenance,
@@ -460,7 +457,7 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     ...(harvestError ? ["Harvest categories unavailable; showing local activities without inferred destinations.", `Harvest lookup: ${harvestError}`] : []),
     "",
     ...sections,
-    ...(totalMinutes > 0 ? ["", `Total: ${formatMinutes(totalMinutes)}`] : []),
+    ...(totalMilliseconds > 0 ? ["", `Total: ${formatExactDuration(totalMilliseconds)}`] : []),
   ].join("\n")
 }
 
@@ -541,24 +538,6 @@ function evidenceKey(value) {
   return String(value).trim().toLowerCase()
 }
 
-function allocateDisplayMinutes(entries, targetMinutes = Math.floor(entries.reduce((total, entry) => total + entry.milliseconds, 0) / 60_000)) {
-  const allocations = new Map(entries.map(entry => [entry, Math.floor(entry.milliseconds / 60_000)]))
-  const target = targetMinutes
-  let remaining = target - [...allocations.values()].reduce((total, minutes) => total + minutes, 0)
-  const fractions = entries
-    .map((entry, index) => ({ entry, index, fraction: entry.milliseconds % 60_000 }))
-    .sort((left, right) => right.fraction - left.fraction || left.index - right.index)
-  for (const { entry } of fractions) {
-    if (remaining <= 0) break
-    allocations.set(entry, allocations.get(entry) + 1)
-    remaining -= 1
-  }
-  return allocations
-}
-
-function formatMinutes(minutes) {
-  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
-}
 
 function compareDraftEntries(left, right) {
   return right.milliseconds - left.milliseconds || String(left.project ?? "").localeCompare(String(right.project ?? "")) || String(left.task ?? "").localeCompare(String(right.task ?? ""))
