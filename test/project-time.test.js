@@ -91,7 +91,7 @@ test("renders a review-only Harvest-shaped draft grouped by suggested destinatio
         { project: { name: "WRAP" }, task: { name: "Programming" } },
       ],
     }),
-    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP Support\nSupport\n- Workflow support · 2:30\nTotal: 2:30\nWRAP\nProgramming\n- Feature delivery · 1:00\nTotal: 1:00\n\nTotal: 3:30",
+    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Workflow support · 2:30\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 2:30\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 3:30",
   )
 })
 
@@ -121,7 +121,7 @@ test("keeps identical workstreams separate across Harvest destinations", () => {
         ],
       },
     ),
-    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nWRAP\nProgramming\n- Feature delivery · 1:00\nTotal: 1:00\nWRAP Support\nSupport\n- Feature delivery · 1:00\nTotal: 1:00\n\nTotal: 2:00",
+    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 2:00",
   )
 })
 
@@ -131,7 +131,7 @@ test("keeps activities visible when no Harvest destination is configured", () =>
       { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Unassigned work", milliseconds: 1_200_000 }] },
       { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] },
     ),
-    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- Unassigned work · 0:20\nLocal total: 0:20\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 0:20",
+    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Unassigned work · 0:20\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:20\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:20",
   )
 })
 test("renders bounded worklog fallback for unmapped activities", () => {
@@ -150,7 +150,7 @@ test("renders bounded worklog fallback for unmapped activities", () => {
         summary: "- Investigated the scheduler issue.\n- Improved the workflow tooling.",
       },
     ),
-    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- Investigated the scheduler issue.\n- Improved the workflow tooling.\nLocal total: 1:00\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 1:00",
+    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Prompt one · 0:30\n- Prompt two · 0:30\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 1:00\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 1:00",
   )
 })
 test("renders durations for unmapped workstreams", () => {
@@ -177,7 +177,7 @@ test("renders durations for unmapped workstreams", () => {
         harvestAssignments: [],
       },
     ),
-    /Harvest destination not configured[\s\S]*- Feature delivery · 0:50[\s\S]*Local total: 0:50/,
+    /Unmapped local work \(not submittable\)[\s\S]*- Feature delivery · 0:50[\s\S]*Local total: 0:50/,
   )
 })
 test("bounds raw unmapped activity fallback", () => {
@@ -189,8 +189,81 @@ test("bounds raw unmapped activity fallback", () => {
   }))
   assert.equal(
     formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] }),
-    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nHarvest destination not configured\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nLocal total: 0:15\nConfigure a Harvest project/task mapping or category assignment for wrap on 2026-07-20.\n\nTotal: 0:15",
+    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:15\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:15",
   )
+})
+test("renders source narratives as mapped notes", () => {
+  assert.equal(
+    formatProjectTimeTimesheet(
+      {
+        groups: [
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Implement validation", milliseconds: 1_800_000 },
+          { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Review validation", milliseconds: 600_000 },
+        ],
+      },
+      {
+        project: "wrap",
+        spentDate: "2026-07-20",
+        categories: new Map([
+          ["Implement validation", "WRAP / Programming"],
+          ["Review validation", "WRAP / Programming"],
+        ]),
+        workstreams: new Map([
+          ["Implement validation", "Validation"],
+          ["Review validation", "Validation"],
+        ]),
+        summaryRecords: [
+          { activity: "Implement validation", narrative: "Implemented validation for the workflow form." },
+          { activity: "Review validation" },
+        ],
+        harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
+      },
+    ),
+    "wrap · Mon, Jul 20 · 0:40\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Validation · 0:40\nNotes (source narrative; review before submitting)\n- Implemented validation for the workflow form.\nDuration: 0:40\n\nTotal: 0:40",
+  )
+})
+test("bounds mapped activity grouping and reconciles its duration", () => {
+  const groups = ["A", "B", "C", "D", "E"].map(activity => ({
+    spentDate: "2026-07-20",
+    sourceKind: "human_active",
+    activity,
+    milliseconds: 90_000,
+  }))
+  const output = formatProjectTimeTimesheet(
+    { groups },
+    {
+      project: "wrap",
+      spentDate: "2026-07-20",
+      categories: new Map(groups.map(group => [group.activity, "WRAP / Programming"])),
+      harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
+    },
+  )
+  assert.match(output, /Activity grouping\n- A · 0:02\n- B · 0:02\n- C · 0:01\n- D · 0:01\n- 1 other local activities · 0:01[\s\S]*Duration: 0:07[\s\S]*Total: 0:07/)
+})
+
+
+test("allocates displayed minutes so split entries reconcile", () => {
+  const output = formatProjectTimeTimesheet(
+    {
+      groups: [
+        { spentDate: "2026-07-20", sourceKind: "human_active", activity: "First", milliseconds: 1_830_000 },
+        { spentDate: "2026-07-20", sourceKind: "human_active", activity: "Second", milliseconds: 1_830_000 },
+      ],
+    },
+    {
+      project: "wrap",
+      spentDate: "2026-07-20",
+      categories: new Map([
+        ["First", "WRAP A / Programming"],
+        ["Second", "WRAP B / Programming"],
+      ]),
+      harvestAssignments: [
+        { project: { name: "WRAP A" }, task: { name: "Programming" } },
+        { project: { name: "WRAP B" }, task: { name: "Programming" } },
+      ],
+    },
+  )
+  assert.match(output, /WRAP A[\s\S]*Duration: 0:31[\s\S]*WRAP B[\s\S]*Duration: 0:30[\s\S]*Total: 1:01/)
 })
 
 
@@ -206,7 +279,7 @@ test("keeps configured destinations when Harvest category lookup fails", () => {
         harvestError: "Harvest unavailable",
       },
     ),
-    /Harvest categories unavailable[\s\S]*WRAP\nProgramming[\s\S]*- Configured work[\s\S]*Total: 0:20/,
+    /Harvest categories unavailable[\s\S]*Project: WRAP[\s\S]*Task: Programming[\s\S]*- Configured work[\s\S]*Duration: 0:20[\s\S]*Total: 0:20/,
   )
 })
 test("sums exact local durations within AI activity categories", () => {

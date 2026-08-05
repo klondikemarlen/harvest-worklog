@@ -767,6 +767,7 @@ export default function harvestTimeExtension(pi, options = {}) {
             categories: generated?.categories,
             workstreams: generated?.workstreams,
             summary: generated?.summary,
+            summaryRecords: plan.summaryRecords,
             harvestAssignments,
             harvestError,
           }),

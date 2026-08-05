@@ -314,7 +314,7 @@ export function resolveProjectTimeDate(value, today = new Date()) {
   }
   return value
 }
-export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, workstreams, summary, harvestAssignments, harvestError }) {
+export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, categories, workstreams, summary, summaryRecords, harvestAssignments, harvestError }) {
   const [year, month, day] = spentDate.split("-").map(Number)
   const groups = plan.groups.filter(group => group.spentDate === spentDate && group.sourceKind === "human_active")
   const heading = `${project} · ${formatShortDate(new Date(year, month - 1, day))} · ${formatDayTotal(groups.reduce((total, group) => total + group.milliseconds, 0))}`
@@ -326,7 +326,7 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, 
     return formatHarvestDraft(heading, provenance, groups, {
       categories,
       workstreams,
-      summary,
+      summaryRecords,
       harvestAssignments,
       harvestError,
       mapping,
@@ -360,7 +360,7 @@ export function formatProjectTimeTimesheet(plan, { project, spentDate, mapping, 
     ...(summary ? ["", "Worklog draft (generated from local records)", summary] : []),
   ].join("\n")
 }
-function formatHarvestDraft(heading, provenance, groups, { categories, workstreams, summary, harvestAssignments, harvestError, mapping, project, spentDate }) {
+function formatHarvestDraft(heading, provenance, groups, { categories, workstreams, summaryRecords, harvestAssignments, harvestError, mapping, project, spentDate }) {
   const assignments = new Map()
   for (const assignment of harvestAssignments) {
     const harvestProject = assignment?.project?.name
@@ -368,6 +368,16 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     if (typeof harvestProject === "string" && harvestProject.trim() && typeof harvestTask === "string" && harvestTask.trim()) {
       assignments.set(`${harvestProject} / ${harvestTask}`, { project: harvestProject, task: harvestTask })
     }
+  }
+
+  const narratives = new Map()
+  for (const record of summaryRecords ?? []) {
+    const narrative = normalizeNote(record?.narrative)
+    if (!narrative) continue
+    const key = evidenceKey(record.activity || "Unlabelled")
+    const values = narratives.get(key) ?? []
+    if (!values.includes(narrative)) values.push(narrative)
+    narratives.set(key, values)
   }
 
   const aggregateWorkstreams = workstreams?.size > 0 && groups.every(group => workstreams.has(group.activity || "Unlabelled"))
@@ -381,51 +391,68 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     const bucket = destination ? destinations : unmapped
     const key = destination ? `${destination.project} / ${destination.task}` : "unmapped"
     const entry = bucket.get(key) ?? {
+      narratives: new Set(),
       workstreams: new Map(),
       milliseconds: 0,
       ...(destination ?? {}),
     }
     entry.milliseconds += group.milliseconds
+    for (const narrative of narratives.get(evidenceKey(activity)) ?? []) entry.narratives.add(narrative)
     entry.workstreams.set(label, (entry.workstreams.get(label) ?? 0) + group.milliseconds)
     bucket.set(key, entry)
   }
 
+  const entries = [...destinations.values(), ...unmapped.values()]
+  const entryMinutes = allocateDisplayMinutes(entries)
   const sections = []
   for (const entry of [...destinations.values()].sort(compareDraftEntries)) {
+    const workstreamEntries = [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds }))
+    const workstreamMinutes = allocateDisplayMinutes(workstreamEntries, entryMinutes.get(entry))
+    const sortedWorkstreams = workstreamEntries
+      .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
+    const visibleWorkstreams = sortedWorkstreams.slice(0, 4)
+    const hiddenWorkstreams = sortedWorkstreams.slice(4)
+    const notes = [...entry.narratives].slice(0, 4)
     sections.push(
-      entry.project,
-      entry.task,
-      ...[...entry.workstreams]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([label, milliseconds]) => `- ${label} · ${formatDayTotal(milliseconds)}`),
-      `Total: ${formatDayTotal(entry.milliseconds)}`,
+      `Date: ${spentDate}`,
+      `Project: ${entry.project}`,
+      `Task: ${entry.task}`,
+      "Activity grouping",
+      ...visibleWorkstreams.map(workstream => `- ${workstream.label} · ${formatMinutes(workstreamMinutes.get(workstream))}`),
+      ...(hiddenWorkstreams.length > 0
+        ? [`- ${hiddenWorkstreams.length} other local activities · ${formatMinutes(hiddenWorkstreams.reduce((total, workstream) => total + workstreamMinutes.get(workstream), 0))}`]
+        : []),
+      ...(notes.length > 0
+        ? ["Notes (source narrative; review before submitting)", ...notes.map(note => `- ${note}`)]
+        : ["Notes (required before submitting)", "- Add a factual Harvest note; local activity labels are reference only."]),
+      `Duration: ${formatMinutes(entryMinutes.get(entry))}`,
     )
   }
   if (unmapped.size > 0) {
     const unmappedEntries = [...unmapped.values()]
-    const unmappedMilliseconds = unmappedEntries.reduce((total, entry) => total + entry.milliseconds, 0)
-    const labels = unmappedEntries.flatMap(entry => [...entry.workstreams])
+    const unmappedEntry = unmappedEntries[0]
+    const labels = unmappedEntries.flatMap(entry => [...entry.workstreams].map(([label, milliseconds]) => ({ label, milliseconds })))
+    const labelMinutes = allocateDisplayMinutes(labels, entryMinutes.get(unmappedEntry))
     const visible = labels
-      .sort(([left, leftMilliseconds], [right, rightMilliseconds]) => rightMilliseconds - leftMilliseconds || left.localeCompare(right))
-    const activityLines = aggregateWorkstreams
-      ? visible.map(([label, milliseconds]) => `- ${label} · ${formatDayTotal(milliseconds)}`)
-      : destinations.size === 0 && summary
-        ? summary.split("\n")
-        : visible.slice(0, 4).map(([label, milliseconds]) => `- ${label} · ${formatDayTotal(milliseconds)}`)
-    const hidden = aggregateWorkstreams || (destinations.size === 0 && summary) ? [] : visible.slice(4)
+      .sort((left, right) => right.milliseconds - left.milliseconds || left.label.localeCompare(right.label))
+      .slice(0, 4)
+    const hidden = labels.slice(4)
     sections.push(
-      "Harvest destination not configured",
-      ...activityLines,
-      ...(hidden.length > 0 ? [`- ${hidden.length} other local activities · ${formatDayTotal(hidden.reduce((total, [, milliseconds]) => total + milliseconds, 0))}`] : []),
-      `Local total: ${formatDayTotal(unmappedMilliseconds)}`,
-      `Configure a Harvest project/task mapping or category assignment for ${project} on ${spentDate}.`,
+      "Unmapped local work (not submittable)",
+      "Activity evidence",
+      ...visible.map(label => `- ${label.label} · ${formatMinutes(labelMinutes.get(label))}`),
+      ...(hidden.length > 0 ? [`- ${hidden.length} other local activities · ${formatMinutes(hidden.reduce((total, label) => total + labelMinutes.get(label), 0))}`] : []),
+      "Notes (required before submitting)",
+      "- Choose a Harvest project/task and add a factual note; local labels are reference only.",
+      `Local total: ${formatMinutes(entryMinutes.get(unmappedEntry))}`,
+      `Not submittable until a Harvest destination and factual note are supplied for ${project} on ${spentDate}.`,
     )
   }
   if (sections.length === 0) {
     sections.push(`No local Project Time sessions found for ${project} on ${spentDate}.`)
   }
 
-  const total = [...destinations.values(), ...unmapped.values()].reduce((sum, entry) => sum + entry.milliseconds, 0)
+  const totalMinutes = entries.reduce((sum, entry) => sum + entryMinutes.get(entry), 0)
   return [
     heading,
     ...provenance,
@@ -433,8 +460,35 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
     ...(harvestError ? ["Harvest categories unavailable; showing local activities without inferred destinations.", `Harvest lookup: ${harvestError}`] : []),
     "",
     ...sections,
-    ...(total > 0 ? ["", `Total: ${formatDayTotal(total)}`] : []),
+    ...(totalMinutes > 0 ? ["", `Total: ${formatMinutes(totalMinutes)}`] : []),
   ].join("\n")
+}
+
+function normalizeNote(value) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""
+}
+
+function evidenceKey(value) {
+  return String(value).trim().toLowerCase()
+}
+
+function allocateDisplayMinutes(entries, targetMinutes = Math.floor(entries.reduce((total, entry) => total + entry.milliseconds, 0) / 60_000)) {
+  const allocations = new Map(entries.map(entry => [entry, Math.floor(entry.milliseconds / 60_000)]))
+  const target = targetMinutes
+  let remaining = target - [...allocations.values()].reduce((total, minutes) => total + minutes, 0)
+  const fractions = entries
+    .map((entry, index) => ({ entry, index, fraction: entry.milliseconds % 60_000 }))
+    .sort((left, right) => right.fraction - left.fraction || left.index - right.index)
+  for (const { entry } of fractions) {
+    if (remaining <= 0) break
+    allocations.set(entry, allocations.get(entry) + 1)
+    remaining -= 1
+  }
+  return allocations
+}
+
+function formatMinutes(minutes) {
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
 }
 
 function compareDraftEntries(left, right) {
