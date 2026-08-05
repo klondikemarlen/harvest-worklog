@@ -71,8 +71,8 @@ The CLI `timesheet` command and `harvest_time_sheet` OMP tool read the authentic
 harvest-worklog timesheet today --project WRAP
 ```
 
-The `/harvest-worklog timesheet today --project wrap` slash command reads the requested local OMP Project Time day and fetches available Harvest project/task categories through the read-only `mapping-data` path. It asks the configured model to classify local activities into those exact categories and concise feature/workstream labels, then renders an `Inferred work timesheet (review only; nothing written)` grouped by project and task with exact local duration totals. This timesheet is a reviewable source for manually entering Harvest time, not a Harvest replacement. Mapped groups include source narratives as reviewable notes when the log provides them; otherwise they explicitly say that a factual Harvest note is required. Unmapped work is marked not submittable and retains bounded local activity evidence. If Harvest lookup or classification is unavailable, configured mappings remain available as a fallback.
-When a Project Time log has no narrative text, the draft does not turn activity labels into Harvest notes; it shows them as reference evidence and asks the user to add factual detail. Logs that provide `narrative.text` can supply reviewable source notes.
+The `/harvest-worklog timesheet today --project wrap` slash command reads the requested local OMP Project Time day and renders a deterministic `Inferred work-timesheet draft (review only; nothing written)`. Only `projectTimeMappings` can supply its Harvest project/task destination. Explicit and carried-forward evidence is mapped; unassigned and ambiguous task evidence stays visible but not submittable. Every source entry shows its ID, source kind, repository identity, interval, task-attribution provenance, and any source narrative. The command never calls or changes Harvest.
+When a Project Time log has no narrative text, the draft does not turn activity labels into Harvest notes; it asks the user to add factual detail.
 `/project-time history` reports all logged dates, so its totals can be larger than the selected day.
 
 Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear only after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names; a prefix filters them case-insensitively. Completion preserves the case-sensitive name required by the command.
@@ -95,13 +95,15 @@ Configure `projectTimeMappings` with the recorded OMP Project Time project name 
 }
 ```
 
+Harvest Worklog reads only the documented `omp-project-time/evidence` format at version `1`. An absent, unsupported, or malformed version produces a no-write diagnostic; run a current Project Time session to persist the v1 ledger format before retrying.
+
 `harvest_preview_project_time_entries` reads only `human_active` sessions from the configured time log, splits them across local dates, combines sources that map to the same Harvest date/project/task, and performs a no-write Harvest preflight. It reports the inferred timesheet entries, source policy, and unmapped sessions; it never records Project Time-derived work in Harvest.
 
-`harvest_preview_project_time_drafts` produces one deterministic, copyable Date/Project/Task/Duration block per mapped local day and Harvest destination from `human_active` evidence. It is the primary reviewable timesheet output: use it as the source for manual Harvest entry after supplying a factual note. Unmapped and excluded evidence remains visible. It reads the local log only; it never calls or mutates Harvest.
+`harvest_preview_project_time_drafts` produces one deterministic, copyable Date/Project/Task/Duration block per mapped local day and Harvest destination from `human_active` evidence. It preserves source entry IDs, intervals, source kind, repository identity, narratives, work items, and task-attribution provenance. Explicit and carried-forward evidence can use the existing project-to-Harvest mapping; unassigned and ambiguous evidence stays visible but not submittable. Generated narratives are review evidence, never task identity or a factual Harvest note. The tool reads the local log only; it never calls or mutates Harvest.
 
 ### Activity transforms
 
-`harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. It defaults to `human_active` and returns the effective top-level `sourceKind`; selecting `agent_turn_elapsed` requires an explicit source-kind request. Set `applyMappings` to include configured Harvest project/task mappings. The output reports groups, candidate mapped entries, and any unmapped or excluded rows; it never writes Harvest.
+`harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. It defaults to `human_active` and returns the effective top-level `sourceKind`; selecting `agent_turn_elapsed` requires an explicit source-kind request. Set `applyMappings` to include configured Harvest project/task mappings. The output reports groups, source records, candidate mapped entries, and any unmapped or excluded rows; it never writes Harvest.
 
 
 ## Daily reconciliation
