@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { readFileSync, statSync } from "node:fs"
-import { approvedProjectTimeMappings, defaultProjectTimeLogPath, formatProjectTimeTimesheet, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
+import { approvedProjectTimeMappings, defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, formatProjectTimeTimesheet, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
 
 function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
@@ -370,6 +370,46 @@ export function createProjectTimeTransformTool(
           content: [{ type: "text", text: JSON.stringify(output) }],
           details: output,
         }
+      }
+    },
+  }
+}
+
+export function createProjectTimeDraftTool(
+  z,
+  {
+    projectTimeMappings = "{}",
+    projectTimeLogPath = "",
+    loadTransform = loadProjectTimeTransform,
+  } = {},
+) {
+  projectTimeLogPath = projectTimeLogPath.trim()
+  return {
+    name: "harvest_preview_project_time_drafts",
+    label: "Draft Automatic Harvest Entries",
+    description: "Create deterministic, copyable Harvest-entry drafts from mapped automatic OMP Project Time evidence. This reads the local log only and never writes Harvest.",
+    approval: "read",
+    parameters: z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+    }),
+    async execute(_toolCallId, params) {
+      try {
+        const plan = await loadTransform({
+          from: params.from,
+          to: params.to,
+          sourceKind: "human_active",
+          applyMappings: true,
+          mappings: parseProjectTimeMappings(projectTimeMappings),
+          logPath: projectTimeLogPath || undefined,
+        })
+        return {
+          content: [{ type: "text", text: formatProjectTimeEntryDrafts(plan) }],
+          details: plan,
+        }
+      } catch (error) {
+        const output = `Could not draft automatic Harvest entries: ${error.message}`
+        return { content: [{ type: "text", text: output }], details: { entries: [] } }
       }
     },
   }
@@ -785,6 +825,10 @@ export default function harvestTimeExtension(pi, options = {}) {
     command,
     defaultHours: options.defaultHours,
     holidayRegions: options.holidayRegions,
+  }))
+  pi.registerTool(createProjectTimeDraftTool(pi.zod.z, {
+    projectTimeMappings,
+    projectTimeLogPath,
   }))
   pi.registerTool(createProjectTimeTool(pi.zod.z, {
     command,

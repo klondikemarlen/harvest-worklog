@@ -464,6 +464,75 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
   ].join("\n")
 }
 
+export function formatProjectTimeEntryDrafts(plan) {
+  const drafts = new Map()
+  for (const entry of plan.entries ?? []) {
+    const key = JSON.stringify([entry.spentDate, entry.project, entry.task])
+    const draft = drafts.get(key) ?? {
+      spentDate: entry.spentDate,
+      project: entry.project,
+      task: entry.task,
+      milliseconds: 0,
+      sources: new Map(),
+    }
+    draft.milliseconds += entry.milliseconds
+    for (const source of entry.sources ?? []) {
+      const sourceKey = JSON.stringify([source.spentDate, source.project, source.repositoryId, source.sourceKind, source.activity])
+      const aggregate = draft.sources.get(sourceKey) ?? { ...source, milliseconds: 0 }
+      aggregate.milliseconds += source.milliseconds
+      draft.sources.set(sourceKey, aggregate)
+    }
+    drafts.set(key, draft)
+  }
+
+  const sections = [...drafts.values()]
+    .sort((left, right) => left.spentDate.localeCompare(right.spentDate) || left.project.localeCompare(right.project) || left.task.localeCompare(right.task))
+    .map(draft => [
+      `Date: ${draft.spentDate}`,
+      `Project: ${draft.project}`,
+      `Task: ${draft.task}`,
+      `Duration: ${formatExactDuration(draft.milliseconds)}`,
+      "Notes (required before submitting)",
+      "- Add a factual Harvest note; automatic activity labels are reference only.",
+      "Source evidence",
+      ...[...draft.sources.values()].sort(compareGroups).map(formatDraftEvidence),
+    ].join("\n"))
+  if (sections.length === 0) sections.push("No mapped automatic Project Time evidence found.")
+
+  const unmapped = plan.unmapped ?? []
+  if (unmapped.length > 0) {
+    sections.push([
+      "Unmapped automatic evidence (not submittable)",
+      ...unmapped.map(formatDraftEvidence),
+    ].join("\n"))
+  }
+  const excluded = plan.excluded ?? []
+  if (excluded.length > 0) {
+    sections.push([
+      "Excluded Project Time evidence",
+      ...excluded.map(entry => `- ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} (${entry.sourceKind ?? "unknown"}; ${entry.reason})`),
+    ].join("\n"))
+  }
+
+  return [
+    `Source policy: ${plan.sourceKind ?? "human_active"} local Project Time intervals only.`,
+    "Harvest entry drafts (review only; nothing written)",
+    ...sections,
+  ].join("\n\n")
+}
+
+function formatDraftEvidence(entry) {
+  return `- ${entry.spentDate} / ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} · ${formatExactDuration(entry.milliseconds)}`
+}
+
+function formatExactDuration(milliseconds) {
+  const minutes = Math.floor(milliseconds / 60_000)
+  const seconds = Math.floor((milliseconds % 60_000) / 1000)
+  const remainder = milliseconds % 1000
+  if (seconds === 0 && remainder === 0) return formatDayTotal(milliseconds)
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${remainder === 0 ? "" : `.${String(remainder).padStart(3, "0")}`}`
+}
+
 function normalizeNote(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""
 }

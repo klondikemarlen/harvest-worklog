@@ -97,6 +97,8 @@ Configure `projectTimeMappings` with the recorded OMP Project Time project name 
 
 `harvest_preview_project_time_entries` reads only `human_active` sessions from the configured time log, splits them across local dates, reports that source policy, generates descriptions from the project and repository, and checks Harvest for existing or locked entries without writing. `harvest_record_project_time_entries` performs the same preflight then creates only new entries; OMP treats it as a write requiring approval. Unmapped sessions are reported and never written.
 
+`harvest_preview_project_time_drafts` produces one deterministic, copyable Date/Project/Task/Duration block per mapped local day and Harvest destination from automatic `human_active` evidence. It requires a factual note before manual entry and keeps unmapped and excluded evidence visible. It reads the local log only; it never calls or mutates Harvest.
+
 ### Activity transforms
 
 `harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. It defaults to `human_active` and returns the effective top-level `sourceKind`; selecting `agent_turn_elapsed` requires an explicit source-kind request. Set `applyMappings` to include configured Harvest project/task mappings. The output reports `groups`, proposed mapped `entries`, and any `unmapped` or `excluded` rows.
