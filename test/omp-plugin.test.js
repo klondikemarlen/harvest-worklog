@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import harvestTimeExtension, { aggregateArguments, createProjectTimeMappingReviewTool, createProjectTimeProjectNamesLoader, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseDailySummary, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
+import harvestTimeExtension, { aggregateArguments, createProjectTimeDraftTool, createProjectTimeMappingReviewTool, createProjectTimeProjectNamesLoader, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseDailySummary, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
 
 const schema = () => ({
   regex() { return this },
@@ -116,6 +116,52 @@ test("registers a read-only daily timesheet wrapper", async () => {
     { cwd: "/tmp", signal: undefined },
   ]])
   assert.equal(result.content[0].text, "WRAP · Fri, Jul 17 · 7h")
+})
+
+test("drafts copyable automatic Harvest entries without mutation", async () => {
+  const calls = []
+  const tool = createProjectTimeDraftTool(z, {
+    projectTimeMappings: JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } }),
+    loadTransform: async options => {
+      calls.push(options)
+      return {
+        sourceKind: "human_active",
+        entries: [
+          {
+            spentDate: "2026-07-20",
+            project: "WRAP",
+            task: "Programming",
+            activity: "Build",
+            milliseconds: 3_600_000,
+            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", activity: "Build", milliseconds: 3_600_000 }],
+          },
+          {
+            spentDate: "2026-07-20",
+            project: "WRAP",
+            task: "Programming",
+            activity: "Review",
+            milliseconds: 1_800_000,
+            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", activity: "Review", milliseconds: 1_800_000 }],
+          },
+        ],
+        unmapped: [{ spentDate: "2026-07-20", project: "other", repositoryId: "repo-c", sourceKind: "human_active", activity: "Plan", milliseconds: 900_000 }],
+        excluded: [{ project: "wrap", repositoryId: "repo-d", sourceKind: "agent_turn_elapsed", activity: "Summarize", reason: "source_kind" }],
+      }
+    },
+  })
+
+  const result = await tool.execute("draft", { from: "2026-07-20", to: "2026-07-20" })
+
+  assert.equal(tool.approval, "read")
+  assert.deepEqual(calls, [{
+    from: "2026-07-20",
+    to: "2026-07-20",
+    sourceKind: "human_active",
+    applyMappings: true,
+    mappings: new Map([["wrap", { project: "WRAP", task: "Programming" }]]),
+    logPath: undefined,
+  }])
+  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nHarvest entry drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30\n- 2026-07-20 / wrap / repo-b / Build · 1:00\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15\n\nExcluded Project Time evidence\n- wrap / repo-d / Summarize (agent_turn_elapsed; source_kind)")
 })
 
 test("reviews mapping candidates without writing Harvest or settings", async () => {
@@ -574,6 +620,7 @@ test("registers against OMP's schema API and renders a review-only Harvest draft
       "harvest_time_aggregates",
       "harvest_time_sheet",
       "harvest_record_time_off",
+      "harvest_preview_project_time_drafts",
       "harvest_preview_project_time_entries",
       "harvest_record_project_time_entries",
       "harvest_preview_project_time_transforms",
