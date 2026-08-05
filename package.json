@@ -1,6 +1,6 @@
 {
   "name": "harvest-worklog",
-  "version": "0.13.9",
+  "version": "0.13.10",
   "description": "Harvest work-log CLI and OMP integration.",
   "type": "module",
   "license": "MIT",
@@ -49,9 +49,6 @@
         "description": "Optional path to OMP Project Time's time-log.json; defaults to ~/.omp/project-time/time-log.json."
       }
     }
-  },
-  "dependencies": {
-    "@oh-my-pi/pi-ai": "^17.0.1"
   },
   "engines": {
     "node": ">=20"
