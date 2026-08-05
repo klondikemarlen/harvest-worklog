@@ -53,7 +53,7 @@ test("labels local activity data and separate Harvest destination", () => {
 
   assert.equal(
     formatProjectTimeTimesheet(plan, { project: "wrap", spentDate: "2026-07-20", mapping: { project: "WRAP (YG - SIS)", task: "Programming" } }),
-    "wrap · Mon, Jul 20 · 6:45\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivity summary\n- Fix test suite · 6:40\n- Prototype template v3 UI · 0:05",
+    "wrap · Mon, Jul 20 · 6:45:40\nSource: local OMP Project Time (not Harvest)\nHarvest destination: WRAP (YG - SIS) / Programming\n\nActivity summary\n- Fix test suite · 6:40:40\n- Prototype template v3 UI · 0:05",
   )
   assert.equal(resolveProjectTimeDate("today", new Date(2026, 6, 20, 12)), "2026-07-20")
   assert.equal(resolveProjectTimeDate("yesterday", new Date(2026, 6, 20, 12)), "2026-07-19")
@@ -238,11 +238,11 @@ test("bounds mapped activity grouping and reconciles its duration", () => {
       harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
     },
   )
-  assert.match(output, /Activity grouping\n- A · 0:02\n- B · 0:02\n- C · 0:01\n- D · 0:01\n- 1 other local activities · 0:01[\s\S]*Duration: 0:07[\s\S]*Total: 0:07/)
+  assert.match(output, /Activity grouping\n- A · 0:01:30\n- B · 0:01:30\n- C · 0:01:30\n- D · 0:01:30\n- 1 other local activities · 0:01:30[\s\S]*Duration: 0:07:30[\s\S]*Total: 0:07:30/)
 })
 
 
-test("allocates displayed minutes so split entries reconcile", () => {
+test("preserves exact durations across split destinations", () => {
   const output = formatProjectTimeTimesheet(
     {
       groups: [
@@ -263,7 +263,7 @@ test("allocates displayed minutes so split entries reconcile", () => {
       ],
     },
   )
-  assert.match(output, /WRAP A[\s\S]*Duration: 0:31[\s\S]*WRAP B[\s\S]*Duration: 0:30[\s\S]*Total: 1:01/)
+  assert.match(output, /WRAP A[\s\S]*Duration: 0:30:30[\s\S]*WRAP B[\s\S]*Duration: 0:30:30[\s\S]*Total: 1:01/)
 })
 
 
@@ -474,6 +474,23 @@ test("maps and splits Project Time sessions by local Harvest date", () => {
     ],
   )
   assert.match(plan.entries[0].notes, /Harvest API \(klondikemarlen\/harvest-api-v2\)/)
+})
+
+test("aggregates mapped sources before ordinary import", () => {
+  const at = hour => new Date(2026, 6, 17, hour).getTime()
+  const plan = projectTimeEntries(
+    { entries: [
+      { project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", startAtMs: at(9), endAtMs: at(10) },
+      { project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", startAtMs: at(10), endAtMs: at(11) },
+    ] },
+    parseProjectTimeMappings(JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } })),
+    { from: "2026-07-17", to: "2026-07-17" },
+  )
+
+  assert.deepEqual(
+    plan.entries,
+    [{ spentDate: "2026-07-17", project: "WRAP", task: "Programming", notes: "OMP Project Time: wrap (repo-a); wrap (repo-b)", milliseconds: 7_200_000, hours: 2 }],
+  )
 })
 
 test("previews mapped Project Time entries without writing", async () => {
