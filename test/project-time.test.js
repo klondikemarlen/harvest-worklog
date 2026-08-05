@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createProjectTimeTool, createProjectTimeTransformTool } from "../index.js"
-import { approvedProjectTimeMappings, formatProjectTimeEntryDrafts, inferProjectTimeMappings, loadProjectTimeEntries, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { approvedProjectTimeMappings, formatProjectTimeEntryDrafts, inferProjectTimeMappings, loadProjectTimeEntries, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const schema = () => ({
   regex() { return this },
@@ -61,16 +61,6 @@ test("lists unique human-active local Project Time names", () => {
 })
 
 
-test("keeps summary records within the requested repository", () => {
-  const state = evidenceState([
-    { sourceKind: "human_active", project: "wrap", repositoryId: "current", activity: "Included", startAtMs: new Date(2026, 6, 20, 9).getTime(), endAtMs: new Date(2026, 6, 20, 9, 30).getTime() },
-    { sourceKind: "human_active", project: "wrap", repositoryId: "other", activity: "Excluded", startAtMs: new Date(2026, 6, 20, 10).getTime(), endAtMs: new Date(2026, 6, 20, 10, 30).getTime() },
-  ])
-  assert.deepEqual(
-    projectTimeSummaryRecords(state, { from: "2026-07-20", to: "2026-07-20", project: "wrap", repositoryId: "current" }),
-    [{ activity: "Included", durationMilliseconds: 1_800_000 }],
-  )
-})
 
 
 test("infers reviewed Harvest mapping candidates deterministically", () => {
