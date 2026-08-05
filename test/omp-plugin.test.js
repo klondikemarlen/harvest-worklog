@@ -132,8 +132,8 @@ test("drafts copyable automatic Harvest entries without mutation", async () => {
             project: "WRAP",
             task: "Programming",
             activity: "Build",
-            milliseconds: 3_600_000,
-            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", activity: "Build", milliseconds: 3_600_000 }],
+            milliseconds: 3_630_000,
+            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", activity: "Build", milliseconds: 3_630_000 }],
           },
           {
             spentDate: "2026-07-20",
@@ -161,7 +161,7 @@ test("drafts copyable automatic Harvest entries without mutation", async () => {
     mappings: new Map([["wrap", { project: "WRAP", task: "Programming" }]]),
     logPath: undefined,
   }])
-  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nHarvest entry drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30\n- 2026-07-20 / wrap / repo-b / Build · 1:00\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15\n\nExcluded Project Time evidence\n- wrap / repo-d / Summarize (agent_turn_elapsed; source_kind)")
+  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nHarvest entry drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30\n- 2026-07-20 / wrap / repo-b / Build · 1:00:30\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15\n\nExcluded Project Time evidence\n- wrap / repo-d / Summarize (agent_turn_elapsed; source_kind)")
 })
 
 test("reviews mapping candidates without writing Harvest or settings", async () => {

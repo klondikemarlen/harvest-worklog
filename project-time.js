@@ -491,7 +491,7 @@ export function formatProjectTimeEntryDrafts(plan) {
       `Date: ${draft.spentDate}`,
       `Project: ${draft.project}`,
       `Task: ${draft.task}`,
-      `Duration: ${formatDayTotal(draft.milliseconds)}`,
+      `Duration: ${formatExactDuration(draft.milliseconds)}`,
       "Notes (required before submitting)",
       "- Add a factual Harvest note; automatic activity labels are reference only.",
       "Source evidence",
@@ -522,7 +522,15 @@ export function formatProjectTimeEntryDrafts(plan) {
 }
 
 function formatDraftEvidence(entry) {
-  return `- ${entry.spentDate} / ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} · ${formatDayTotal(entry.milliseconds)}`
+  return `- ${entry.spentDate} / ${entry.project ?? "unlabelled"} / ${entry.repositoryId ?? "unknown repository"} / ${entry.activity} · ${formatExactDuration(entry.milliseconds)}`
+}
+
+function formatExactDuration(milliseconds) {
+  const minutes = Math.floor(milliseconds / 60_000)
+  const seconds = Math.floor((milliseconds % 60_000) / 1000)
+  const remainder = milliseconds % 1000
+  if (seconds === 0 && remainder === 0) return formatDayTotal(milliseconds)
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${remainder === 0 ? "" : `.${String(remainder).padStart(3, "0")}`}`
 }
 
 function normalizeNote(value) {
