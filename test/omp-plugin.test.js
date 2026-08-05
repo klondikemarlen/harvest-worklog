@@ -118,7 +118,7 @@ test("registers a read-only daily timesheet wrapper", async () => {
   assert.equal(result.content[0].text, "WRAP · Fri, Jul 17 · 7h")
 })
 
-test("drafts copyable automatic Harvest entries without mutation", async () => {
+test("drafts copyable inferred work timesheets without mutation", async () => {
   const calls = []
   const tool = createProjectTimeDraftTool(z, {
     projectTimeMappings: JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } }),
@@ -161,7 +161,7 @@ test("drafts copyable automatic Harvest entries without mutation", async () => {
     mappings: new Map([["wrap", { project: "WRAP", task: "Programming" }]]),
     logPath: undefined,
   }])
-  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nHarvest entry drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30\n- 2026-07-20 / wrap / repo-b / Build · 1:00:30\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15\n\nExcluded Project Time evidence\n- wrap / repo-d / Summarize (agent_turn_elapsed; source_kind)")
+  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nInferred work-timesheet drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30\n- 2026-07-20 / wrap / repo-b / Build · 1:00:30\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15\n\nExcluded Project Time evidence\n- wrap / repo-d / Summarize (agent_turn_elapsed; source_kind)")
 })
 
 test("reviews mapping candidates without writing Harvest or settings", async () => {
@@ -514,7 +514,7 @@ test("parses quoted explicit timesheet arguments", () => {
   assert.equal(parseCommandArguments("timesheet today --project 'WRAP"), null)
 })
 
-test("registers against OMP's schema API and renders a review-only Harvest draft from local Project Time", async () => {
+test("registers against OMP's schema API and renders a review-only inferred work timesheet from local Project Time", async () => {
   const tools = []
   const commands = []
   const calls = []
@@ -611,7 +611,7 @@ test("registers against OMP's schema API and renders a review-only Harvest draft
     ["mapping-data", "2026-07-20", "2026-07-20"],
     { cwd: "/tmp" },
   ]])
-  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45:40\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP (YG - SIS)\nTask: Programming\nActivity grouping\n- Project test suite · 6:40:40\nNotes (source narrative; review before submitting)\n- Fixed the project test suite.\nDuration: 6:40:40\nDate: 2026-07-20\nProject: WRAP Support (YG - SIS)\nTask: Support\nActivity grouping\n- Template v3 development · 0:05\nNotes (source narrative; review before submitting)\n- Improved the template v3 workflow.\nDuration: 0:05\n\nTotal: 6:45:40")
+  assert.equal(messages[0].message.content, "wrap · Mon, Jul 20 · 6:45:40\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP (YG - SIS)\nTask: Programming\nActivity grouping\n- Project test suite · 6:40:40\nNotes (source narrative; review before submitting)\n- Fixed the project test suite.\nDuration: 6:40:40\nDate: 2026-07-20\nProject: WRAP Support (YG - SIS)\nTask: Support\nActivity grouping\n- Template v3 development · 0:05\nNotes (source narrative; review before submitting)\n- Improved the template v3 workflow.\nDuration: 0:05\n\nTotal: 6:45:40")
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(calls.length, 1)
   assert.deepEqual(
@@ -622,10 +622,9 @@ test("registers against OMP's schema API and renders a review-only Harvest draft
       "harvest_record_time_off",
       "harvest_preview_project_time_drafts",
       "harvest_preview_project_time_entries",
-      "harvest_record_project_time_entries",
       "harvest_preview_project_time_transforms",
-      "harvest_record_project_time_transforms",
       "harvest_review_project_time_mappings",
     ],
   )
+  assert.deepEqual(tools.filter(tool => tool.approval === "write").map(tool => tool.name), ["harvest_record_time_off"])
 })

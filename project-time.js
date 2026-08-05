@@ -453,7 +453,7 @@ function formatHarvestDraft(heading, provenance, groups, { categories, workstrea
   return [
     heading,
     ...provenance,
-    "Harvest draft (review only; nothing written)",
+    "Inferred work timesheet (review only; nothing written)",
     ...(harvestError ? ["Harvest categories unavailable; showing local activities without inferred destinations.", `Harvest lookup: ${harvestError}`] : []),
     "",
     ...sections,
@@ -513,7 +513,7 @@ export function formatProjectTimeEntryDrafts(plan) {
 
   return [
     `Source policy: ${plan.sourceKind ?? "human_active"} local Project Time intervals only.`,
-    "Harvest entry drafts (review only; nothing written)",
+    "Inferred work-timesheet drafts (review only; nothing written)",
     ...sections,
   ].join("\n\n")
 }

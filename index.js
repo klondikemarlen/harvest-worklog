@@ -202,18 +202,16 @@ export function runCommand(command, args, { cwd, signal } = {}) {
   })
 }
 
-export function workEntryArguments(entry, dryRun, { activityEntry = false } = {}) {
-  const args = [
+function previewWorkEntryArguments(entry) {
+  return [
     "work-entry",
     entry.spentDate,
     "--project", entry.project,
     "--task", entry.task,
     "--hours", String(entry.hours),
     "--notes", entry.notes,
+    "--dry-run",
   ]
-  if (dryRun) args.push("--dry-run")
-  if (activityEntry) args.push("--activity-entry")
-  return args
 }
 
 export function aggregateArguments({ from, to, project, task }) {
@@ -241,16 +239,14 @@ export function createProjectTimeTool(
     run = runCommand,
     loadEntries = loadProjectTimeEntries,
   } = {},
-  { dryRun },
 ) {
   command = normalizeCommand(command)
   projectTimeLogPath = projectTimeLogPath.trim()
-  const operation = dryRun ? "Preview" : "Record"
   return {
-    name: dryRun ? "harvest_preview_project_time_entries" : "harvest_record_project_time_entries",
-    label: `${operation} Harvest Project Time`,
-    description: `${operation} configured OMP Project Time sessions as Harvest work entries for an inclusive date range. Unmapped sessions and existing or locked Harvest entries are reported; recording requires approval.`,
-    approval: dryRun ? "read" : "write",
+    name: "harvest_preview_project_time_entries",
+    label: "Preview Inferred Work Timesheet",
+    description: "Preview configured OMP Project Time sessions as a reviewable work timesheet. This preflight never writes Harvest.",
+    approval: "read",
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
@@ -274,10 +270,10 @@ export function createProjectTimeTool(
           }
         }
 
-        onUpdate?.({ content: [{ type: "text", text: `${operation}ing ${plan.entries.length} Harvest work entr${plan.entries.length === 1 ? "y" : "ies"}…` }] })
+        onUpdate?.({ content: [{ type: "text", text: `Previewing ${plan.entries.length} inferred work-timesheet entr${plan.entries.length === 1 ? "y" : "ies"}…` }] })
         const results = []
         for (const entry of plan.entries) {
-          const result = await run(command, workEntryArguments(entry, dryRun), { cwd: ctx.cwd, signal })
+          const result = await run(command, previewWorkEntryArguments(entry), { cwd: ctx.cwd, signal })
           results.push({ entry, ...result })
         }
         const output = results.map(result => {
@@ -291,7 +287,7 @@ export function createProjectTimeTool(
         }
       } catch (error) {
         return {
-          content: [{ type: "text", text: `Could not ${operation.toLowerCase()} OMP Project Time entries: ${error.message}` }],
+          content: [{ type: "text", text: `Could not preview inferred work timesheet: ${error.message}` }],
           details: { entries: [] },
         }
       }
@@ -302,33 +298,26 @@ export function createProjectTimeTool(
 export function createProjectTimeTransformTool(
   z,
   {
-    command = "harvest-worklog",
     projectTimeMappings = "{}",
     projectTimeLogPath = "",
-    run = runCommand,
     loadTransform = loadProjectTimeTransform,
   } = {},
-  { record },
 ) {
-  command = normalizeCommand(command)
   projectTimeLogPath = projectTimeLogPath.trim()
-  const operation = record ? "Record" : "Preview"
-  const parameters = {
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-    repositoryId: nonBlankString(z).optional(),
-    project: nonBlankString(z).optional(),
-    sourceKind: nonBlankString(z).optional(),
-  }
-  if (!record) parameters.applyMappings = z.boolean().optional()
-
   return {
-    name: record ? "harvest_record_project_time_transforms" : "harvest_preview_project_time_transforms",
-    label: `${operation} Project Time transforms`,
-    description: `${operation} local Project Time intervals grouped by date and activity. Preview never writes Harvest; recording is approval-gated and preserves duplicate and locked-entry checks.`,
-    approval: record ? "write" : "read",
-    parameters: z.object(parameters),
-    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+    name: "harvest_preview_project_time_transforms",
+    label: "Preview Project Time Evidence",
+    description: "Preview local Project Time intervals grouped by date and activity. This never writes Harvest.",
+    approval: "read",
+    parameters: z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
+      repositoryId: nonBlankString(z).optional(),
+      project: nonBlankString(z).optional(),
+      sourceKind: nonBlankString(z).optional(),
+      applyMappings: z.boolean().optional(),
+    }),
+    async execute(_toolCallId, params) {
       try {
         const { repositoryId, project, sourceKind, ...request } = params
         const plan = await loadTransform({
@@ -336,33 +325,13 @@ export function createProjectTimeTransformTool(
           repositoryId: trimOptionalString(repositoryId),
           project: trimOptionalString(project),
           sourceKind: trimOptionalString(sourceKind),
-          applyMappings: record || params.applyMappings === true,
+          applyMappings: params.applyMappings === true,
           mappings: parseProjectTimeMappings(projectTimeMappings),
           logPath: projectTimeLogPath || undefined,
         })
-        if (!record) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(plan) }],
-            details: plan,
-          }
-        }
-
-        onUpdate?.({ content: [{ type: "text", text: `Recording ${plan.entries.length} transformed Harvest work entr${plan.entries.length === 1 ? "y" : "ies"}…` }] })
-        const results = []
-        for (const entry of plan.entries) {
-          const result = await run(command, workEntryArguments(entry, false, { activityEntry: true }), { cwd: ctx.cwd, signal })
-          results.push({
-            entry,
-            code: result.code,
-            stdout: result.stdout,
-            stderr: result.stderr,
-            spawnError: result.spawnError?.message ?? null,
-          })
-        }
-        const output = { plan, results }
         return {
-          content: [{ type: "text", text: JSON.stringify(output) }],
-          details: output,
+          content: [{ type: "text", text: JSON.stringify(plan) }],
+          details: plan,
         }
       } catch (error) {
         const output = { error: error.message }
@@ -386,8 +355,8 @@ export function createProjectTimeDraftTool(
   projectTimeLogPath = projectTimeLogPath.trim()
   return {
     name: "harvest_preview_project_time_drafts",
-    label: "Draft Automatic Harvest Entries",
-    description: "Create deterministic, copyable Harvest-entry drafts from mapped automatic OMP Project Time evidence. This reads the local log only and never writes Harvest.",
+    label: "Preview Inferred Work Timesheet",
+    description: "Create a deterministic, copyable work-timesheet draft from mapped human-active OMP Project Time evidence. This reads the local log only and never writes Harvest.",
     approval: "read",
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
@@ -408,7 +377,7 @@ export function createProjectTimeDraftTool(
           details: plan,
         }
       } catch (error) {
-        const output = `Could not draft automatic Harvest entries: ${error.message}`
+        const output = `Could not preview inferred work timesheet: ${error.message}`
         return { content: [{ type: "text", text: output }], details: { entries: [] } }
       }
     },
@@ -834,22 +803,11 @@ export default function harvestTimeExtension(pi, options = {}) {
     command,
     projectTimeMappings,
     projectTimeLogPath,
-  }, { dryRun: true }))
-  pi.registerTool(createProjectTimeTool(pi.zod.z, {
-    command,
-    projectTimeMappings,
-    projectTimeLogPath,
-  }, { dryRun: false }))
+  }))
   pi.registerTool(createProjectTimeTransformTool(pi.zod.z, {
-    command,
     projectTimeMappings,
     projectTimeLogPath,
-  }, { record: false }))
-  pi.registerTool(createProjectTimeTransformTool(pi.zod.z, {
-    command,
-    projectTimeMappings,
-    projectTimeLogPath,
-  }, { record: true }))
+  }))
   pi.registerTool(createProjectTimeMappingReviewTool(pi.zod.z, {
     command,
     projectTimeLogPath,
