@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-import { createProjectTimeTool, createProjectTimeTransformTool, workEntryArguments } from "../index.js"
+import { createProjectTimeTool, createProjectTimeTransformTool } from "../index.js"
 import { approvedProjectTimeMappings, formatProjectTimeTimesheet, inferProjectTimeMappings, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeSummaryRecords, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const narrativeFixtures = JSON.parse(await readFile(new URL("./fixtures/narrative-worklog-scenarios.json", import.meta.url), "utf8"))
@@ -91,7 +91,7 @@ test("renders a review-only Harvest-shaped draft grouped by suggested destinatio
         { project: { name: "WRAP" }, task: { name: "Programming" } },
       ],
     }),
-    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Workflow support · 2:30\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 2:30\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 3:30",
+    "wrap · Mon, Jul 20 · 3:30\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Workflow support · 2:30\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 2:30\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 3:30",
   )
 })
 
@@ -121,7 +121,7 @@ test("keeps identical workstreams separate across Harvest destinations", () => {
         ],
       },
     ),
-    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 2:00",
+    "wrap · Mon, Jul 20 · 2:00\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\nDate: 2026-07-20\nProject: WRAP Support\nTask: Support\nActivity grouping\n- Feature delivery · 1:00\nNotes (required before submitting)\n- Add a factual Harvest note; local activity labels are reference only.\nDuration: 1:00\n\nTotal: 2:00",
   )
 })
 
@@ -131,7 +131,7 @@ test("keeps activities visible when no Harvest destination is configured", () =>
       { groups: [{ spentDate: "2026-07-20", sourceKind: "human_active", activity: "Unassigned work", milliseconds: 1_200_000 }] },
       { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] },
     ),
-    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Unassigned work · 0:20\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:20\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:20",
+    "wrap · Mon, Jul 20 · 0:20\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Unassigned work · 0:20\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:20\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:20",
   )
 })
 test("renders bounded worklog fallback for unmapped activities", () => {
@@ -150,7 +150,7 @@ test("renders bounded worklog fallback for unmapped activities", () => {
         summary: "- Investigated the scheduler issue.\n- Improved the workflow tooling.",
       },
     ),
-    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Prompt one · 0:30\n- Prompt two · 0:30\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 1:00\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 1:00",
+    "wrap · Mon, Jul 20 · 1:00\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- Prompt one · 0:30\n- Prompt two · 0:30\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 1:00\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 1:00",
   )
 })
 test("renders durations for unmapped workstreams", () => {
@@ -189,7 +189,7 @@ test("bounds raw unmapped activity fallback", () => {
   }))
   assert.equal(
     formatProjectTimeTimesheet({ groups }, { project: "wrap", spentDate: "2026-07-20", harvestAssignments: [] }),
-    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:15\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:15",
+    "wrap · Mon, Jul 20 · 0:15\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nUnmapped local work (not submittable)\nActivity evidence\n- E · 0:05\n- D · 0:04\n- C · 0:03\n- B · 0:02\n- 1 other local activities · 0:01\nNotes (required before submitting)\n- Choose a Harvest project/task and add a factual note; local labels are reference only.\nLocal total: 0:15\nNot submittable until a Harvest destination and factual note are supplied for wrap on 2026-07-20.\n\nTotal: 0:15",
   )
 })
 test("renders source narratives as mapped notes", () => {
@@ -219,7 +219,7 @@ test("renders source narratives as mapped notes", () => {
         harvestAssignments: [{ project: { name: "WRAP" }, task: { name: "Programming" } }],
       },
     ),
-    "wrap · Mon, Jul 20 · 0:40\nSource: local OMP Project Time (not Harvest)\nHarvest draft (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Validation · 0:40\nNotes (source narrative; review before submitting)\n- Implemented validation for the workflow form.\nDuration: 0:40\n\nTotal: 0:40",
+    "wrap · Mon, Jul 20 · 0:40\nSource: local OMP Project Time (not Harvest)\nInferred work timesheet (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nActivity grouping\n- Validation · 0:40\nNotes (source narrative; review before submitting)\n- Implemented validation for the workflow form.\nDuration: 0:40\n\nTotal: 0:40",
   )
 })
 test("bounds mapped activity grouping and reconciles its duration", () => {
@@ -493,7 +493,7 @@ test("aggregates mapped sources before ordinary import", () => {
   )
 })
 
-test("previews mapped Project Time entries without writing", async () => {
+test("previews inferred Project Time entries without writing", async () => {
   const calls = []
   const loads = []
   const preview = createProjectTimeTool(z, {
@@ -513,7 +513,7 @@ test("previews mapped Project Time entries without writing", async () => {
       calls.push(args)
       return { code: 0, stdout: "Would create 2026-07-17", stderr: "" }
     },
-  }, { dryRun: true })
+  })
 
   const result = await preview.execute("call-1", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
 
@@ -528,13 +528,6 @@ test("previews mapped Project Time entries without writing", async () => {
   assert.match(result.content[0].text, /Source policy: human_active local Project Time intervals only\./)
   assert.equal(result.details.sourceKind, "human_active")
   assert.match(result.content[0].text, /Skipped 1 unmapped session/)
-
-  const record = createProjectTimeTool(z, {}, { dryRun: false })
-  assert.equal(record.approval, "write")
-  assert.deepEqual(
-    workEntryArguments({ spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 1.25, notes: "OMP Project Time: Harvest API (repo)" }, false),
-    ["work-entry", "2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)"],
-  )
 })
 
 test("filters, groups, maps, and reports Project Time transforms deterministically", () => {
@@ -608,7 +601,7 @@ test("defaults transforms to human-active intervals", () => {
   assert.deepEqual(explicitPlan.entries.map(({ hours }) => hours), [1])
 })
 
-test("previews JSON transforms and records activity entries sequentially", async () => {
+test("previews JSON transforms without writing activity entries", async () => {
   const plan = {
     groups: [],
     entries: [
@@ -624,7 +617,7 @@ test("previews JSON transforms and records activity entries sequentially", async
       previewCalls.push(options)
       return plan
     },
-  }, { record: false })
+  })
 
   const previewResult = await preview.execute("preview", {
     from: "2026-07-17",
@@ -632,33 +625,11 @@ test("previews JSON transforms and records activity entries sequentially", async
     repositoryId: "repo",
     sourceKind: "human_active",
     applyMappings: true,
-  }, undefined, undefined, { cwd: "/tmp" })
+  })
 
   assert.equal(preview.approval, "read")
   assert.deepEqual(JSON.parse(previewResult.content[0].text), plan)
   assert.equal(previewCalls[0].applyMappings, true)
-
-  const calls = []
-  let inFlight = 0
-  let maximumInFlight = 0
-  const record = createProjectTimeTransformTool(z, {
-    loadTransform: async () => plan,
-    run: async (...args) => {
-      calls.push(args)
-      inFlight += 1
-      maximumInFlight = Math.max(maximumInFlight, inFlight)
-      await new Promise(resolve => setTimeout(resolve, 0))
-      inFlight -= 1
-      return { code: 0, stdout: "Created", stderr: "" }
-    },
-  }, { record: true })
-
-  const recordResult = await record.execute("record", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
-
-  assert.equal(record.approval, "write")
-  assert.equal(maximumInFlight, 1)
-  assert.deepEqual(calls.map(([, args]) => args.at(-1)), ["--activity-entry", "--activity-entry"])
-  assert.deepEqual(JSON.parse(recordResult.content[0].text).results.map(result => result.code), [0, 0])
 })
 
 test("does not propose activity groups that round to zero Harvest hours", () => {
