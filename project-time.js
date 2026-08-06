@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 
@@ -17,7 +19,52 @@ function projectTimeEvidenceEntries(state) {
 }
 
 export function defaultProjectTimeLogPath() {
-  return path.join(homedir(), ".omp", "project-time", "time-log.json")
+  return path.join(homedir(), ".omp", "project-time", "time-log.sqlite")
+}
+
+function openProjectTimeDatabase(logPath) {
+  const require = createRequire(import.meta.url)
+  if ("Bun" in globalThis) {
+    const { Database } = require("bun:sqlite")
+    return new Database(logPath, { readonly: true })
+  }
+  try {
+    const { DatabaseSync } = require("node:sqlite")
+    return new DatabaseSync(logPath, { readOnly: true })
+  } catch {
+    throw new Error("Project Time SQLite evidence requires OMP's Bun runtime")
+  }
+}
+
+function projectTimeStateFromDatabase(logPath, openDatabase) {
+  const database = openDatabase(logPath)
+  try {
+    const statement = database.query?.("SELECT entry_json FROM entries ORDER BY rowid")
+      ?? database.prepare?.("SELECT entry_json FROM entries ORDER BY rowid")
+    if (!statement) throw new Error("Project Time SQLite database does not support queries")
+
+    return {
+      format: PROJECT_TIME_EVIDENCE_FORMAT,
+      version: PROJECT_TIME_EVIDENCE_VERSION,
+      entries: statement.all().map(row => {
+        if (typeof row.entry_json !== "string") {
+          throw new Error("Project Time SQLite evidence entry is unreadable")
+        }
+        return JSON.parse(row.entry_json)
+      }),
+    }
+  } finally {
+    database.close()
+  }
+}
+
+export function readProjectTimeState(
+  logPath = defaultProjectTimeLogPath(),
+  { read = readFileSync, openDatabase = openProjectTimeDatabase } = {},
+) {
+  return logPath.endsWith(".sqlite")
+    ? projectTimeStateFromDatabase(logPath, openDatabase)
+    : JSON.parse(read(logPath, "utf8"))
 }
 
 export function parseProjectTimeMappings(value) {
@@ -139,8 +186,10 @@ export function projectTimeTransform(
 }
 
 
-export async function loadProjectTimeTransform({ from, to, repositoryId, project, sourceKind, applyMappings, mappings, logPath = defaultProjectTimeLogPath(), read = readFile }) {
-  const state = JSON.parse(await read(logPath, "utf8"))
+export async function loadProjectTimeTransform({ from, to, repositoryId, project, sourceKind, applyMappings, mappings, logPath = defaultProjectTimeLogPath(), read = readFile, openDatabase = openProjectTimeDatabase }) {
+  const state = logPath.endsWith(".sqlite")
+    ? projectTimeStateFromDatabase(logPath, openDatabase)
+    : JSON.parse(await read(logPath, "utf8"))
   return projectTimeTransform(state, mappings, { from, to, repositoryId, project, sourceKind, applyMappings })
 }
 
