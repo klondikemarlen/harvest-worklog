@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { readFileSync, statSync } from "node:fs"
-import { defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
+import { defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, readProjectTimeState, resolveProjectTimeDate } from "./project-time.js"
 
 function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
@@ -322,7 +322,7 @@ export function createProjectTimeProjectNamesLoader({ read = readFileSync, stat 
       const stamp = `${mtimeMs}:${size}`
       if (cachedPath === path && cachedStamp === stamp) return cachedProjects
 
-      cachedProjects = projectTimeProjectNames(JSON.parse(read(path, "utf8")))
+      cachedProjects = projectTimeProjectNames(readProjectTimeState(path, { read }))
       cachedPath = path
       cachedStamp = stamp
       return cachedProjects

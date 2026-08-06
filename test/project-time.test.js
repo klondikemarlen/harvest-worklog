@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createProjectTimeTransformTool } from "../index.js"
-import { formatProjectTimeEntryDrafts, parseProjectTimeMappings, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const schema = () => ({
   regex() { return this },
@@ -58,6 +58,49 @@ test("lists unique human-active local Project Time names", () => {
     ])),
     ["Ice Fog Analytics", "wrap"],
   )
+})
+
+test("loads current Project Time SQLite evidence", async () => {
+  const startAtMs = new Date(2026, 6, 17, 9).getTime()
+  const entry = {
+    id: "entry-1",
+    project: "Harvest Worklog",
+    repositoryId: "github.com/klondikemarlen/harvest-worklog",
+    sourceKind: "human_active",
+    activity: "implementation",
+    startAtMs,
+    endAtMs: startAtMs + 3_600_000,
+  }
+  let closed = false
+  const plan = await loadProjectTimeTransform({
+    from: "2026-07-17",
+    to: "2026-07-17",
+    mappings: new Map(),
+    logPath: "/tmp/time-log.sqlite",
+    openDatabase(logPath) {
+      assert.equal(logPath, "/tmp/time-log.sqlite")
+      return {
+        query(sql) {
+          assert.equal(sql, "SELECT entry_json FROM entries ORDER BY rowid")
+          return { all: () => [{ entry_json: JSON.stringify(entry) }] }
+        },
+        close() { closed = true },
+      }
+    },
+  })
+
+  const legacyPlan = await loadProjectTimeTransform({
+    from: "2026-07-17",
+    to: "2026-07-17",
+    mappings: new Map(),
+    logPath: "/tmp/time-log.json",
+    read: async () => JSON.stringify(evidenceState([entry])),
+  })
+
+  assert.match(defaultProjectTimeLogPath(), /time-log\.sqlite$/)
+  assert.equal(plan.groups[0].hours, 1)
+  assert.equal(legacyPlan.groups[0].hours, 1)
+  assert.equal(closed, true)
 })
 
 
