@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { readFileSync, statSync } from "node:fs"
-import { approvedProjectTimeMappings, defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, inferProjectTimeMappings, loadProjectTimeEntries, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
+import { defaultProjectTimeLogPath, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, resolveProjectTimeDate } from "./project-time.js"
 
 function normalizeHolidayRegions(regions) {
   return [...new Set(regions.map(region => region.trim().toLowerCase()).filter(Boolean))]
@@ -70,98 +70,6 @@ export function runCommand(command, args, { cwd, signal } = {}) {
   })
 }
 
-function previewWorkEntryArguments(entry) {
-  return [
-    "work-entry",
-    entry.spentDate,
-    "--project", entry.project,
-    "--task", entry.task,
-    "--hours", String(entry.hours),
-    "--notes", entry.notes,
-    "--dry-run",
-  ]
-}
-
-export function aggregateArguments({ from, to, project, task }) {
-  const args = ["aggregate", from, to]
-  const normalizedProject = trimOptionalString(project)
-  const normalizedTask = trimOptionalString(task)
-  if (normalizedProject) args.push("--project", normalizedProject)
-  if (normalizedTask) args.push("--task", normalizedTask)
-  return args
-}
-
-export function timesheetArguments({ date, project, task }) {
-  const args = ["timesheet", date, "--project", project.trim()]
-  const normalizedTask = trimOptionalString(task)
-  if (normalizedTask) args.push("--task", normalizedTask)
-  return args
-}
-
-export function createProjectTimeTool(
-  z,
-  {
-    command = "harvest-worklog",
-    projectTimeMappings = "{}",
-    projectTimeLogPath = "",
-    run = runCommand,
-    loadEntries = loadProjectTimeEntries,
-  } = {},
-) {
-  command = normalizeCommand(command)
-  projectTimeLogPath = projectTimeLogPath.trim()
-  return {
-    name: "harvest_preview_project_time_entries",
-    label: "Preview Inferred Work Timesheet",
-    description: "Preview configured OMP Project Time sessions as a reviewable work timesheet. This preflight never writes Harvest.",
-    approval: "read",
-    parameters: z.object({
-      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-    }),
-    async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      try {
-        const mappings = parseProjectTimeMappings(projectTimeMappings)
-        const plan = await loadEntries({
-          from: params.from,
-          to: params.to,
-          mappings,
-          logPath: projectTimeLogPath || undefined,
-        })
-        const sourceKind = plan.sourceKind ?? "human_active"
-        const sourcePolicy = `Source policy: ${sourceKind} local Project Time intervals only.`
-        if (plan.entries.length === 0) {
-          const unmapped = plan.unmapped ? ` ${plan.unmapped} unmapped session(s) were skipped.` : ""
-          return {
-            content: [{ type: "text", text: `${sourcePolicy}\nNo mapped OMP Project Time sessions found.${unmapped}` }],
-            details: { sourceKind, entries: [], unmapped: plan.unmapped },
-          }
-        }
-
-        onUpdate?.({ content: [{ type: "text", text: `Previewing ${plan.entries.length} inferred work-timesheet entr${plan.entries.length === 1 ? "y" : "ies"}…` }] })
-        const results = []
-        for (const entry of plan.entries) {
-          const result = await run(command, previewWorkEntryArguments(entry), { cwd: ctx.cwd, signal })
-          results.push({ entry, ...result })
-        }
-        const output = results.map(result => {
-          if (result.spawnError) return `${result.entry.spentDate}: Could not run ${command}: ${result.spawnError.message}`
-          return [result.stdout, result.stderr].filter(Boolean).join("\n").trim() || `${result.entry.spentDate}: ${command} exited with ${result.code}`
-        }).join("\n")
-        const unmapped = plan.unmapped ? `\nSkipped ${plan.unmapped} unmapped session(s).` : ""
-        return {
-          content: [{ type: "text", text: `${sourcePolicy}\n${output}${unmapped}` }],
-          details: { sourceKind, entries: plan.entries, unmapped: plan.unmapped, results },
-        }
-      } catch (error) {
-        return {
-          content: [{ type: "text", text: `Could not preview inferred work timesheet: ${error.message}` }],
-          details: { entries: [] },
-        }
-      }
-    },
-  }
-}
 
 export function createProjectTimeTransformTool(
   z,
@@ -224,7 +132,7 @@ export function createProjectTimeDraftTool(
   return {
     name: "harvest_preview_project_time_drafts",
     label: "Preview Inferred Work Timesheet",
-    description: "Create a deterministic, copyable work-timesheet draft from mapped human-active OMP Project Time evidence. This reads the local log only and never writes Harvest.",
+    description: "Create a deterministic, copyable work-timesheet draft from human-active OMP Project Time evidence. Configured mappings identify Harvest destinations; every other local project remains a review-required draft. This reads the local log only and never writes Harvest.",
     approval: "read",
     parameters: z.object({
       from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
@@ -252,110 +160,6 @@ export function createProjectTimeDraftTool(
   }
 }
 
-export function createProjectTimeMappingReviewTool(z, { command = "harvest-worklog", projectTimeLogPath = "", run = runCommand, loadTransform = loadProjectTimeTransform } = {}) {
-  command = normalizeCommand(command)
-  projectTimeLogPath = projectTimeLogPath.trim()
-  return {
-    name: "harvest_review_project_time_mappings",
-    label: "Review Project Time mapping candidates",
-    description: "Read local human-active Project Time and Harvest assignments/history to produce reviewable mapping candidates. Approved candidates are returned as projectTimeMappings JSON; nothing is persisted or recorded.",
-    approval: "read",
-    parameters: z.object({
-      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      approvals: z.array(z.object({
-        sourceProject: nonBlankString(z),
-        projectId: z.number().int().min(1),
-        taskId: z.number().int().min(1),
-      })).optional(),
-    }),
-    async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      try {
-        onUpdate?.({ content: [{ type: "text", text: "Reading Project Time mapping candidates…" }] })
-        const [plan, result] = await Promise.all([
-          loadTransform({ from: params.from, to: params.to, mappings: new Map(), logPath: projectTimeLogPath || undefined }),
-          run(command, ["mapping-data", params.from, params.to], { cwd: ctx.cwd, signal }),
-        ])
-        if (result.spawnError) throw result.spawnError
-        if (result.code !== 0) throw new Error(result.stderr.trim() || `${command} exited with ${result.code}`)
-        const analysis = inferProjectTimeMappings(plan, JSON.parse(result.stdout))
-        const approvals = params.approvals?.map(approval => ({ ...approval, sourceProject: approval.sourceProject.trim() }))
-        const output = approvals ? { analysis, projectTimeMappings: approvedProjectTimeMappings(analysis, approvals) } : analysis
-        return { content: [{ type: "text", text: JSON.stringify(output) }], details: output }
-      } catch (error) {
-        const output = { error: error.message }
-        return { content: [{ type: "text", text: JSON.stringify(output) }], details: output }
-      }
-    },
-  }
-}
-
-export function createTimeAggregateTool(z, { command = "harvest-worklog", run = runCommand } = {}) {
-  command = normalizeCommand(command)
-  return {
-    name: "harvest_time_aggregates",
-    label: "View Harvest Time Aggregates",
-    description: "Read Harvest time-entry totals for an inclusive date range, grouped by date and project/task. This does not write Harvest records.",
-    approval: "read",
-    parameters: z.object({
-      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
-      project: nonBlankString(z).optional(),
-      task: nonBlankString(z).optional(),
-    }),
-    async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      const args = aggregateArguments(params)
-      onUpdate?.({ content: [{ type: "text", text: "Reading Harvest time aggregates…" }] })
-      const result = await run(command, args, { cwd: ctx.cwd, signal })
-      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
-
-      if (result.spawnError) {
-        return {
-          content: [{ type: "text", text: `Could not run ${command}: ${result.spawnError.message}` }],
-          details: { command, args, code: result.code },
-        }
-      }
-
-      return {
-        content: [{ type: "text", text: output || `${command} exited with ${result.code}` }],
-        details: { command, args, code: result.code },
-      }
-    },
-  }
-}
-
-export function createTimesheetTool(z, { command = "harvest-worklog", run = runCommand } = {}) {
-  command = normalizeCommand(command)
-  return {
-    name: "harvest_time_sheet",
-    label: "View Daily Harvest Timesheet",
-    description: "Read one project's compact Harvest timesheet for today, yesterday, or an ISO date. This does not write Harvest records.",
-    approval: "read",
-    parameters: z.object({
-      date: z.string().regex(DATE_PATTERN, "must be today, yesterday, or an ISO date"),
-      project: nonBlankString(z),
-      task: nonBlankString(z).optional(),
-    }),
-    async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      const args = timesheetArguments(params)
-      onUpdate?.({ content: [{ type: "text", text: "Reading Harvest timesheet…" }] })
-      const result = await run(command, args, { cwd: ctx.cwd, signal })
-      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
-
-      if (result.spawnError) {
-        return {
-          content: [{ type: "text", text: `Could not run ${command}: ${result.spawnError.message}` }],
-          details: { command, args, code: result.code },
-        }
-      }
-
-      return {
-        content: [{ type: "text", text: output || `${command} exited with ${result.code}` }],
-        details: { command, args, code: result.code },
-      }
-    },
-  }
-}
 
 function hasValidAssignment({ project, task, projectId, taskId }) {
   const anyNames = project !== undefined || task !== undefined
@@ -408,7 +212,7 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
 
 const HARVEST_WORKLOG_USAGE = [
   "Usage:",
-  "  /harvest-worklog timesheet DATE --project PROJECT",
+  "  /harvest-worklog timesheet DATE [--project PROJECT]",
   "",
   "DATE: today, yesterday, or YYYY-MM-DD",
 ].join("\n")
@@ -438,7 +242,7 @@ export function harvestWorklogArgumentCompletions(argumentPrefix, projects = [])
 
   if (!trimmed || !input.includes(" ")) {
     const choices = [
-      { label: "timesheet", value: "timesheet", description: "Read one project's personal daily timesheet" },
+      { label: "timesheet", value: "timesheet", description: "Build a reviewable daily timesheet from local Project Time" },
       { label: "help", value: "help", description: "Show the timesheet command form and date options" },
     ]
     return choices.filter(choice => choice.value.startsWith(trimmed.toLowerCase()))
@@ -575,6 +379,7 @@ function isTimesheetForm(words, allowIncomplete = false) {
   if (allowIncomplete && words.length === 1) return true
   if (!DATE_PATTERN.test(words[1])) return false
   if (allowIncomplete && words.length === 2) return true
+  if (words.length === 2) return true
   if (words[2] !== "--project" || !words[3] || words[3].startsWith("--")) return false
   return words.length === 4
 }
@@ -594,13 +399,12 @@ export function parseHarvestWorklogArguments(args) {
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Worklog")
   const command = normalizeCommand(options.command)
-  const run = options.run ?? runCommand
   const projectTimeMappings = options.projectTimeMappings?.trim() || "{}"
   const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
   const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
   pi.registerCommand("harvest-worklog", {
-    description: "Build a review-only Harvest-shaped draft from one project's local OMP Project Time",
+    description: "Build a review-only multi-project timesheet from local OMP Project Time",
     getArgumentCompletions: input => harvestWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
     handler: async (args, ctx) => {
       const parsed = parseHarvestWorklogArguments(args)
@@ -611,7 +415,7 @@ export default function harvestTimeExtension(pi, options = {}) {
 
       try {
         const spentDate = resolveProjectTimeDate(parsed.argv[1])
-        const project = parsed.argv[3]
+        const project = parsed.argv[2] === "--project" ? parsed.argv[3] : undefined
         const mappings = parseProjectTimeMappings(projectTimeMappings)
         const plan = await loadTransform({
           from: spentDate,
@@ -633,8 +437,6 @@ export default function harvestTimeExtension(pi, options = {}) {
       }
     },
   })
-  pi.registerTool(createTimeAggregateTool(pi.zod.z, { command }))
-  pi.registerTool(createTimesheetTool(pi.zod.z, { command, run }))
   pi.registerTool(createTimeOffTool(pi.zod.z, {
     command,
     defaultHours: options.defaultHours,
@@ -644,17 +446,8 @@ export default function harvestTimeExtension(pi, options = {}) {
     projectTimeMappings,
     projectTimeLogPath,
   }))
-  pi.registerTool(createProjectTimeTool(pi.zod.z, {
-    command,
-    projectTimeMappings,
-    projectTimeLogPath,
-  }))
   pi.registerTool(createProjectTimeTransformTool(pi.zod.z, {
     projectTimeMappings,
-    projectTimeLogPath,
-  }))
-  pi.registerTool(createProjectTimeMappingReviewTool(pi.zod.z, {
-    command,
     projectTimeLogPath,
   }))
 }

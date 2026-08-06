@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import harvestTimeExtension, { aggregateArguments, createProjectTimeDraftTool, createProjectTimeMappingReviewTool, createProjectTimeProjectNamesLoader, createTimeAggregateTool, createTimeOffTool, createTimesheetTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments, timesheetArguments } from "../index.js"
+import harvestTimeExtension, { createProjectTimeDraftTool, createProjectTimeProjectNamesLoader, createTimeOffTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments } from "../index.js"
 
 const schema = () => ({
   regex() { return this },
@@ -55,96 +55,24 @@ test("builds a safe CLI argument vector", () => {
   )
 })
 
-test("registers a read-only aggregate tool", async () => {
-  const calls = []
-  const tool = createTimeAggregateTool(z, {
-    command: "harvest-worklog",
-    run: async (...args) => {
-      calls.push(args)
-      return { code: 0, stdout: "2 entries, 8.5h", stderr: "" }
-    },
-  })
 
-  const result = await tool.execute(
-    "call-aggregate",
-    { from: "2026-07-17", to: "2026-07-19", project: "WRAP", task: "Programming" },
-    undefined,
-    undefined,
-    { cwd: "/tmp" },
-  )
 
-  assert.equal(tool.approval, "read")
-  assert.deepEqual(
-    aggregateArguments({ from: "2026-07-17", to: "2026-07-19", project: "WRAP", task: "Programming" }),
-    ["aggregate", "2026-07-17", "2026-07-19", "--project", "WRAP", "--task", "Programming"],
-  )
-  assert.deepEqual(calls, [[
-    "harvest-worklog",
-    ["aggregate", "2026-07-17", "2026-07-19", "--project", "WRAP", "--task", "Programming"],
-    { cwd: "/tmp", signal: undefined },
-  ]])
-  assert.equal(result.content[0].text, "2 entries, 8.5h")
-})
-
-test("registers a read-only daily timesheet wrapper", async () => {
-  const calls = []
-  const tool = createTimesheetTool(z, {
-    command: "harvest-worklog",
-    run: async (...args) => {
-      calls.push(args)
-      return { code: 0, stdout: "WRAP · Fri, Jul 17 · 7h", stderr: "" }
-    },
-  })
-
-  const result = await tool.execute(
-    "call-timesheet",
-    { date: "today", project: "WRAP", task: "Programming" },
-    undefined,
-    undefined,
-    { cwd: "/tmp" },
-  )
-
-  assert.equal(tool.approval, "read")
-  assert.deepEqual(
-    timesheetArguments({ date: "today", project: "WRAP", task: "Programming" }),
-    ["timesheet", "today", "--project", "WRAP", "--task", "Programming"],
-  )
-  assert.deepEqual(calls, [[
-    "harvest-worklog",
-    ["timesheet", "today", "--project", "WRAP", "--task", "Programming"],
-    { cwd: "/tmp", signal: undefined },
-  ]])
-  assert.equal(result.content[0].text, "WRAP · Fri, Jul 17 · 7h")
-})
-
-test("drafts copyable inferred work timesheets without mutation", async () => {
-  const calls = []
+test("drafts local Project Time evidence without calling Harvest", async () => {
+  const loads = []
   const tool = createProjectTimeDraftTool(z, {
-    projectTimeMappings: JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } }),
     loadTransform: async options => {
-      calls.push(options)
+      loads.push(options)
       return {
         sourceKind: "human_active",
-        entries: [
-          {
-            spentDate: "2026-07-20",
-            project: "WRAP",
-            task: "Programming",
-            activity: "Build",
-            milliseconds: 3_630_000,
-            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", activity: "Build", milliseconds: 3_630_000 }],
-          },
-          {
-            spentDate: "2026-07-20",
-            project: "WRAP",
-            task: "Programming",
-            activity: "Review",
-            milliseconds: 1_800_000,
-            sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", activity: "Review", milliseconds: 1_800_000 }],
-          },
-        ],
-        unmapped: [{ spentDate: "2026-07-20", project: "other", repositoryId: "repo-c", sourceKind: "human_active", activity: "Plan", milliseconds: 900_000 }],
-        excluded: [{ project: "wrap", repositoryId: "repo-d", sourceKind: "agent_turn_elapsed", activity: "Summarize", reason: "source_kind" }],
+        entries: [{
+          spentDate: "2026-07-20",
+          project: "wrap",
+          task: "Review destination",
+          destination: "Local Project Time project — no configured Harvest destination; choose a Harvest project and task before submitting.",
+          milliseconds: 5_430_000,
+          sources: [{ spentDate: "2026-07-20", project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", activity: "Build", milliseconds: 5_430_000 }],
+        }],
+        excluded: [],
       }
     },
   })
@@ -152,42 +80,18 @@ test("drafts copyable inferred work timesheets without mutation", async () => {
   const result = await tool.execute("draft", { from: "2026-07-20", to: "2026-07-20" })
 
   assert.equal(tool.approval, "read")
-  assert.deepEqual(calls, [{
+  assert.deepEqual(loads, [{
     from: "2026-07-20",
     to: "2026-07-20",
     sourceKind: "human_active",
     applyMappings: true,
-    mappings: new Map([["wrap", { project: "WRAP", task: "Programming" }]]),
+    mappings: new Map(),
     logPath: undefined,
   }])
-  assert.equal(result.content[0].text, "Source policy: human_active local Project Time intervals only.\n\nInferred work-timesheet drafts (review only; nothing written)\n\nDate: 2026-07-20\nProject: WRAP\nTask: Programming\nDuration: 1:30:30\nNotes (required before submitting)\n- Add a factual Harvest note; automatic activity labels are reference only.\nSource evidence\n- 2026-07-20 / wrap / repo-a / Review · 0:30 (source kind human_active)\n- 2026-07-20 / wrap / repo-b / Build · 1:00:30 (source kind human_active)\n\nUnmapped automatic evidence (not submittable)\n- 2026-07-20 / other / repo-c / Plan · 0:15 (source kind human_active)\n\nExcluded Project Time evidence\n- unknown date / wrap / repo-d / Summarize · 0:00 (source kind agent_turn_elapsed; source_kind)")
+  assert.match(result.content[0].text, /Project: wrap\nTask: Review destination\nDestination: Local Project Time project/)
+  assert.match(result.content[0].text, /Duration: 1:30:30/)
 })
 
-test("reviews mapping candidates without writing Harvest or settings", async () => {
-  const calls = []
-  const tool = createProjectTimeMappingReviewTool(z, {
-    run: async (...args) => {
-      calls.push(args)
-      return {
-        code: 0,
-        stdout: JSON.stringify({
-          assignments: [{ project: { id: 1, name: "WRAP" }, task: { id: 2, name: "Programming" } }],
-          entries: [{ project: { id: 1, name: "WRAP" }, task: { id: 2, name: "Programming" }, hours: 2 }],
-        }),
-        stderr: "",
-      }
-    },
-    loadTransform: async () => ({
-      groups: [{ project: "wrap", repositoryId: "hashed", activity: "Implementation", sourceKind: "human_active", milliseconds: 7_200_000 }],
-    }),
-  })
-
-  const result = await tool.execute("review", { from: "2026-07-17", to: "2026-07-17", approvals: [{ sourceProject: "wrap", projectId: 1, taskId: 2 }] }, undefined, undefined, { cwd: "/tmp" })
-
-  assert.equal(tool.approval, "read")
-  assert.deepEqual(calls, [["harvest-worklog", ["mapping-data", "2026-07-17", "2026-07-17"], { cwd: "/tmp", signal: undefined }]])
-  assert.deepEqual(result.details.projectTimeMappings, { wrap: { project: "WRAP", task: "Programming" } })
-})
 
 test("registers an approval-gated OMP write tool", async () => {
   const calls = []
@@ -338,6 +242,7 @@ test("parses quoted explicit timesheet arguments", () => {
     parseHarvestWorklogArguments("timesheet today --project 'Ice Fog Analytics'"),
     { argv: ["timesheet", "today", "--project", "Ice Fog Analytics"] },
   )
+  assert.deepEqual(parseHarvestWorklogArguments("timesheet today"), { argv: ["timesheet", "today"] })
   assert.deepEqual(parseHarvestWorklogArguments("timesheet --help"), { help: true })
   assert.deepEqual(parseHarvestWorklogArguments("timesheet today --help"), { help: true })
   assert.equal(parseHarvestWorklogArguments("today Ice Fog Analytics --task Programming"), null)
@@ -380,6 +285,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
           spentDate: "2026-07-20",
           project: "WRAP (YG - SIS)",
           task: "Programming",
+          destination: "Configured Harvest destination",
           milliseconds: 24_040_000,
           sources: [{
             id: "entry-explicit",
@@ -399,28 +305,6 @@ test("registers a deterministic no-write Project Time draft command", async () =
             milliseconds: 24_040_000,
           }],
         }],
-        unmapped: [{
-          spentDate: "2026-07-20",
-          sourceKind: "human_active",
-          project: "wrap",
-          repositoryId: "repository-id",
-          activity: "Unassigned review",
-          workItemAttribution: "unassigned",
-          sources: [{
-            id: "entry-unassigned",
-            spentDate: "2026-07-20",
-            sourceKind: "human_active",
-            project: "wrap",
-            repositoryId: "repository-id",
-            activity: "Unassigned review",
-            workItemAttribution: "unassigned",
-            segmentStartAtMs: new Date(2026, 6, 20, 16).getTime(),
-            segmentEndAtMs: new Date(2026, 6, 20, 16, 5).getTime(),
-            milliseconds: 300_000,
-          }],
-          milliseconds: 300_000,
-          reason: "unassigned_work_item",
-        }],
       }
     },
   })
@@ -436,32 +320,38 @@ test("registers a deterministic no-write Project Time draft command", async () =
     ["timesheet today --project wrap"],
   )
   await command.handler("", { cwd: "/tmp", ui })
-  assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE --project PROJECT/)
+  assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE \[--project PROJECT\]/)
 
+  await command.handler("timesheet 2026-07-20", { cwd: "/tmp", ui })
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui })
-  assert.deepEqual(transformLoads, [{
-    from: "2026-07-20",
-    to: "2026-07-20",
-    project: "wrap",
-    mappings: new Map([["wrap", { project: "WRAP (YG - SIS)", task: "Programming" }]]),
-    applyMappings: true,
-    logPath: "/tmp/project-time.json",
-  }])
-  assert.match(messages[0].message.content, /^Source policy: human_active local Project Time intervals only\.\n\nInferred work-timesheet drafts \(review only; nothing written\)\n\nDate: 2026-07-20\nProject: WRAP \(YG - SIS\)\nTask: Programming/)
-  assert.match(messages[0].message.content, /source entry-explicit; source kind human_active; repository github\.com\/klondikemarlen\/wrap; task explicit_prompt issue #91 \(klondikemarlen\/harvest-worklog\)/)
-  assert.match(messages[0].message.content, /Unmapped automatic evidence \(not submittable\)[\s\S]*source entry-unassigned; source kind human_active; task unassigned[\s\S]*unassigned_work_item/)
+  assert.deepEqual(transformLoads, [
+    {
+      from: "2026-07-20",
+      to: "2026-07-20",
+      project: undefined,
+      mappings: new Map([["wrap", { project: "WRAP (YG - SIS)", task: "Programming" }]]),
+      applyMappings: true,
+      logPath: "/tmp/project-time.json",
+    },
+    {
+      from: "2026-07-20",
+      to: "2026-07-20",
+      project: "wrap",
+      mappings: new Map([["wrap", { project: "WRAP (YG - SIS)", task: "Programming" }]]),
+      applyMappings: true,
+      logPath: "/tmp/project-time.json",
+    },
+  ])
+  assert.match(messages[0].message.content, /Destination: Configured Harvest destination/)
+  assert.match(messages[1].message.content, /source entry-explicit; source kind human_active; repository github\.com\/klondikemarlen\/wrap; task explicit_prompt issue #91 \(klondikemarlen\/harvest-worklog\)/)
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 1)
+  assert.equal(messages.length, 2)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
-      "harvest_time_aggregates",
-      "harvest_time_sheet",
       "harvest_record_time_off",
       "harvest_preview_project_time_drafts",
-      "harvest_preview_project_time_entries",
       "harvest_preview_project_time_transforms",
-      "harvest_review_project_time_mappings",
     ],
   )
   assert.deepEqual(tools.filter(tool => tool.approval === "write").map(tool => tool.name), ["harvest_record_time_off"])

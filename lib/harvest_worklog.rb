@@ -35,19 +35,11 @@ module HarvestWorklog
         TimeOffCLI.run(command_arguments, output:, error:, client:)
       when "work-entry"
         WorkEntryCLI.run(command_arguments, output:, error:, client:)
-      when "aggregate"
-        AggregateCLI.run(command_arguments, output:, error:, client:)
-      when "timesheet"
-        TimesheetCLI.run(command_arguments, output:, error:, client:)
-      when "reconcile"
-        ReconcileCLI.run(command_arguments, output:, error:, client:)
-      when "mapping-data"
-        MappingDataCLI.run(command_arguments, output:, error:, client:)
       when "-h", "--help"
         output.puts usage
         0
       else
-        error.puts "Error: choose time-off, work-entry, aggregate, timesheet, reconcile, or mapping-data"
+        error.puts "Error: choose time-off or work-entry"
         error.puts usage
         1
       end
@@ -60,18 +52,10 @@ module HarvestWorklog
           harvest-worklog time-off FROM TO --project-id ID --task-id ID [options]
           harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
           harvest-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
-          harvest-worklog aggregate FROM TO [--project NAME] [--task NAME]
-          harvest-worklog timesheet DATE --project NAME [--task NAME]
-          harvest-worklog reconcile DATE --project PROJECT --harvest-project NAME [--task NAME]
-          harvest-worklog mapping-data FROM TO
 
         Commands:
           time-off    Create one entry per local business day in a date range.
           work-entry  Create one reviewed ordinary-work entry.
-          aggregate   Read time-entry totals without writing Harvest records.
-          timesheet  Read a compact daily project timesheet without writing Harvest records.
-          reconcile   Compare local Project Time with manual Harvest without writing.
-          mapping-data Read assigned Harvest destinations and historical entries without writing.
       USAGE
     end
   end
@@ -193,7 +177,3 @@ module HarvestWorklog
 end
 
 require "harvest_worklog/work_entry_cli"
-require "harvest_worklog/aggregate_cli"
-require "harvest_worklog/timesheet_cli"
-require "harvest_worklog/reconcile_cli"
-require "harvest_worklog/mapping_data_cli"
