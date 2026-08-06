@@ -68,8 +68,8 @@ Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear aft
 - `defaultHours`: hours per business day when a time-off tool call omits `hours`; defaults to `7`.
 - `holidayRegions`: comma-separated Holidays regions; defaults to `ca_yt`.
 - `command`: direct path to the `harvest-worklog` executable.
-- `projectTimeMappings`: optional JSON mapping from OMP Project Time project names to Harvest project/task names. Unmapped evidence remains a review-required local draft.
-- `projectTimeLogPath`: optional override for `~/.omp/project-time/time-log.json`.
+- `projectTimeLogPath`: optional path to Project Time v1 evidence; defaults to `~/.omp/project-time/time-log.sqlite`. A legacy versioned JSON snapshot is also supported.
+
 
 ## OMP Project Time integration
 
@@ -81,7 +81,7 @@ Configure `projectTimeMappings` with the recorded OMP Project Time project name 
 }
 ```
 
-Harvest Worklog reads only the documented `omp-project-time/evidence` format at version `1`. An absent, unsupported, or malformed version produces a no-write diagnostic; run a current Project Time session to persist the v1 ledger format before retrying.
+Harvest Worklog reads Project Time's persisted `omp-project-time/evidence` v1 entries. An absent, unsupported, or malformed ledger produces a no-write diagnostic; run a current Project Time session to create the SQLite ledger before retrying.
 
 `harvest_preview_project_time_drafts` produces deterministic, copyable Date/Project/Task/Duration blocks from all local `human_active` evidence in an inclusive date range. Mapped evidence uses its configured Harvest destination; unmapped, ambiguous, and unassigned evidence remains an explicit local-project draft. It preserves source entry IDs, intervals, source kind, repository identity, narratives, work items, and task-attribution provenance. Generated narratives are review evidence, never task identity or a factual Harvest note. The tool reads the local log only; it never calls or mutates Harvest.
 
