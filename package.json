@@ -1,7 +1,7 @@
 {
   "name": "harvest-worklog",
-  "version": "0.13.11",
-  "description": "Harvest work-log CLI and OMP integration.",
+  "version": "0.13.12",
+  "description": "Project Time work-timesheet drafts with manual Harvest writes.",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -41,7 +41,7 @@
       "projectTimeMappings": {
         "type": "string",
         "default": "{}",
-        "description": "JSON mapping from OMP Project Time project names to Harvest project and task names."
+        "description": "Optional JSON mapping from OMP Project Time project names to Harvest project and task names."
       },
       "projectTimeLogPath": {
         "type": "string",
