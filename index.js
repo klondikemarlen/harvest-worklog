@@ -265,8 +265,8 @@ export function createProjectTimeMappingReviewTool(z, { command = "harvest-workl
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       approvals: z.array(z.object({
         sourceProject: nonBlankString(z),
-        projectId: z.number().int().positive(),
-        taskId: z.number().int().positive(),
+        projectId: z.number().int().min(1),
+        taskId: z.number().int().min(1),
       })).optional(),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -376,9 +376,9 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be an ISO date"),
       project: nonBlankString(z).optional(),
       task: nonBlankString(z).optional(),
-      projectId: z.number().int().positive().optional(),
-      taskId: z.number().int().positive().optional(),
-      hours: z.number().positive().optional(),
+      projectId: z.number().int().min(1).optional(),
+      taskId: z.number().int().min(1).optional(),
+      hours: z.number().min(Number.MIN_VALUE).optional(),
       notes: nonBlankString(z).optional(),
       holidayRegions: z.array(nonBlankString(z)).optional(),
       dryRun: z.boolean().optional(),

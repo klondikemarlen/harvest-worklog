@@ -7,7 +7,6 @@ const schema = () => ({
   regex() { return this },
   min() { return this },
   int() { return this },
-  positive() { return this },
   optional() { return this },
 })
 const z = {
