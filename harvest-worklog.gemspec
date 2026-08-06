@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.version = HarvestWorklog::VERSION
   spec.authors = ["Marlen Brunner"]
   spec.email = ["klondikemarlen@gmail.com"]
-  spec.summary = "Harvest work-log CLI and OMP integration."
+  spec.summary = "Project Time work-timesheet drafts with manual Harvest writes."
   spec.homepage = "https://github.com/klondikemarlen/harvest-worklog"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
