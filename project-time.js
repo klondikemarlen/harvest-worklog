@@ -47,94 +47,6 @@ export function parseProjectTimeMappings(value) {
   return result
 }
 
-export function inferProjectTimeMappings(plan, harvest) {
-  const assignments = harvest.assignments
-    .filter(assignment => Number.isInteger(assignment?.project?.id) && typeof assignment.project.name === "string" && Number.isInteger(assignment?.task?.id) && typeof assignment.task.name === "string")
-  const entries = harvest.entries.filter(entry => Number.isFinite(Number(entry.hours)))
-  const agentElapsedMs = plan.groups
-    .filter(group => group.sourceKind === "agent_turn_elapsed")
-    .reduce((total, group) => total + group.milliseconds, 0)
-  const sources = new Map()
-
-  for (const group of plan.groups.filter(group => group.sourceKind === "human_active")) {
-    if (typeof group.project !== "string" || group.project.trim().length === 0) continue
-    const sourceKey = normalizeMappingLabel(group.project)
-    const source = sources.get(sourceKey) ?? {
-      project: group.project,
-      repositoryIds: new Set(),
-      activities: new Set(),
-      milliseconds: 0,
-      projects: new Set(),
-    }
-    if (group.repositoryId) source.repositoryIds.add(group.repositoryId)
-    source.projects.add(group.project)
-    source.activities.add(group.activity)
-    source.milliseconds += group.milliseconds
-    sources.set(sourceKey, source)
-  }
-
-  return {
-    excluded: { sourceKind: "agent_turn_elapsed", hours: displayHours(agentElapsedMs) },
-    candidates: [...sources.values()].map(source => {
-      const projectAssignments = assignments.filter(assignment => normalizeMappingLabel(assignment.project.name) === normalizeMappingLabel(source.project))
-      const projectEntryCount = entries.filter(entry => projectAssignments.some(assignment => matchesHarvestAssignment(entry, assignment))).length
-      const candidates = projectAssignments.map(assignment => {
-        const historyCount = entries.filter(entry => matchesHarvestAssignment(entry, assignment)).length
-        const historyHours = entries
-          .filter(entry => matchesHarvestAssignment(entry, assignment))
-          .reduce((total, entry) => total + Number(entry.hours), 0)
-        const historyScore = projectEntryCount === 0 ? 0 : Math.round((historyCount / projectEntryCount) * 20)
-        return {
-          project: assignment.project,
-          task: assignment.task,
-          score: 100 + historyScore,
-          reasons: [
-            `Normalized local project ${JSON.stringify(source.project)} matches assigned Harvest project ${JSON.stringify(assignment.project.name)}.`,
-            ...(historyCount > 0 ? [`${historyCount} historical ${historyCount === 1 ? "entry" : "entries"} (${Math.round(historyHours * 100) / 100}h) for this project/task in the requested range.`] : []),
-          ],
-        }
-      }).sort((left, right) => right.score - left.score || left.project.name.localeCompare(right.project.name) || left.task.name.localeCompare(right.task.name) || left.task.id - right.task.id)
-      const status = candidates.length === 0 ? "unmatched" : candidates.length === 1 || candidates[0].score > candidates[1].score ? "suggested" : "ambiguous"
-
-      return {
-        source: {
-          project: source.project,
-          projects: [...source.projects].sort(),
-          repositoryIds: [...source.repositoryIds].sort(),
-          activities: [...source.activities].sort(),
-          hours: displayHours(source.milliseconds),
-        },
-        status,
-        candidates,
-      }
-    }).sort((left, right) => left.source.project.localeCompare(right.source.project)),
-  }
-
-}
-
-export function approvedProjectTimeMappings(analysis, approvals) {
-  const mappings = {}
-  const approvedSources = new Set()
-  for (const approval of approvals) {
-    const source = analysis.candidates.find(candidate => candidate.source.projects.includes(approval.sourceProject))
-    if (!source) throw new Error(`approval for ${approval.sourceProject} is not an analysed Harvest candidate`)
-    if (approvedSources.has(source.source.project)) throw new Error(`source project ${approval.sourceProject} was approved more than once`)
-    const candidate = source.candidates.find(candidate => candidate.project.id === approval.projectId && candidate.task.id === approval.taskId)
-    if (!candidate) throw new Error(`approval for ${approval.sourceProject} is not an analysed Harvest candidate`)
-    approvedSources.add(source.source.project)
-    for (const project of source.source.projects) mappings[project] = { project: candidate.project.name, task: candidate.task.name }
-  }
-  return mappings
-}
-
-function normalizeMappingLabel(value) {
-  return value.normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^\p{Letter}\p{Number}]+/gu, "")
-}
-
-
-function matchesHarvestAssignment(entry, assignment) {
-  return entry?.project?.id === assignment.project.id && entry?.task?.id === assignment.task.id
-}
 
 export function projectTimeProjectNames(state) {
   return [...new Set(projectTimeEvidenceEntries(state)
@@ -143,59 +55,6 @@ export function projectTimeProjectNames(state) {
     .sort((left, right) => left.localeCompare(right))
 }
 
-export function projectTimeEntries(state, mappings, { from, to }) {
-  const entries = projectTimeEvidenceEntries(state)
-  const grouped = new Map()
-  let unmapped = 0
-
-  for (const session of entries) {
-    if (session.sourceKind !== "human_active") continue
-    if (session.workItemAttribution === "unassigned" || session.workItemAttribution === "ambiguous") {
-      unmapped += 1
-      continue
-    }
-    const mapping = mappings.get(session.project)
-    if (!mapping) {
-      unmapped += 1
-      continue
-    }
-    if (!Number.isFinite(session.startAtMs) || !Number.isFinite(session.endAtMs) || session.startAtMs >= session.endAtMs) {
-      throw new Error("OMP Project Time log contains an invalid session interval")
-    }
-
-    let cursor = session.startAtMs
-    while (cursor < session.endAtMs) {
-      const date = new Date(cursor)
-      const spentDate = localDate(date)
-      const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime()
-      const segmentEnd = Math.min(session.endAtMs, nextDay)
-
-      if (spentDate >= from && spentDate <= to) {
-        const key = [spentDate, mapping.project, mapping.task].join("\u0000")
-        const entry = grouped.get(key) ?? {
-          spentDate,
-          project: mapping.project,
-          task: mapping.task,
-          sources: new Set(),
-          milliseconds: 0,
-        }
-        entry.sources.add(`${session.project} (${session.repositoryId})`)
-        entry.milliseconds += segmentEnd - cursor
-        grouped.set(key, entry)
-      }
-      cursor = segmentEnd
-    }
-  }
-
-  return {
-    sourceKind: "human_active",
-    entries: [...grouped.values()]
-      .map(({ sources, ...entry }) => ({ ...entry, notes: `OMP Project Time: ${[...sources].sort().join("; ")}`, hours: Math.round((entry.milliseconds / HOUR_MS) * 100) / 100 }))
-      .filter(entry => entry.hours > 0)
-      .sort((left, right) => left.spentDate.localeCompare(right.spentDate) || left.notes.localeCompare(right.notes)),
-    unmapped,
-  }
-}
 
 export function projectTimeTransform(
   state,
@@ -269,14 +128,12 @@ export function projectTimeTransform(
   const groups = [...grouped.values()]
     .map(entry => ({ ...entry, sources: entry.sources.sort(compareEvidenceSources), hours: displayHours(entry.milliseconds), harvest: null }))
     .sort(compareGroups)
-  const unmapped = []
-  const mapped = applyMappings ? mappedEntries(groups, mappings, unmapped) : []
+  const timesheetDraftEntries = applyMappings ? timesheetEntries(groups, mappings) : []
 
   return {
     sourceKind,
     groups,
-    entries: mapped,
-    unmapped: unmapped.sort(compareGroups),
+    entries: timesheetDraftEntries,
     excluded: excluded.sort(compareRows),
   }
 }
@@ -314,6 +171,7 @@ export function formatProjectTimeEntryDrafts(plan) {
       spentDate: entry.spentDate,
       project: entry.project,
       task: entry.task,
+      destination: entry.destination,
       milliseconds: 0,
       sources: new Map(),
     }
@@ -333,21 +191,14 @@ export function formatProjectTimeEntryDrafts(plan) {
       `Date: ${draft.spentDate}`,
       `Project: ${draft.project}`,
       `Task: ${draft.task}`,
+      `Destination: ${draft.destination}`,
       `Duration: ${formatExactDuration(draft.milliseconds)}`,
       "Notes (required before submitting)",
       "- Add a factual Harvest note; automatic activity labels are reference only.",
       "Source evidence",
       ...[...draft.sources.values()].sort(compareGroups).map(formatDraftEvidence),
     ].join("\n"))
-  if (sections.length === 0) sections.push("No mapped automatic Project Time evidence found.")
-
-  const unmapped = plan.unmapped ?? []
-  if (unmapped.length > 0) {
-    sections.push([
-      "Unmapped automatic evidence (not submittable)",
-      ...unmapped.flatMap(entry => entry.sources?.length > 0 ? entry.sources.map(source => ({ ...source, reason: entry.reason })) : [entry]).sort(compareEvidenceSources).map(formatDraftEvidence),
-    ].join("\n"))
-  }
+  if (sections.length === 0) sections.push("No local Project Time evidence found.")
   const excluded = plan.excluded ?? []
   if (excluded.length > 0) {
     sections.push([
@@ -395,27 +246,17 @@ function formatDayTotal(milliseconds) {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
 }
 
-function mappedEntries(groups, mappings, unmapped) {
+function timesheetEntries(groups, mappings) {
   const entries = new Map()
 
   for (const group of groups) {
-    if (group.workItemAttribution === "unassigned" || group.workItemAttribution === "ambiguous") {
-      unmapped.push({ ...group, reason: `${group.workItemAttribution}_work_item` })
-      continue
-    }
-    const mapping = mappings.get(group.project)
-    if (!mapping) {
-      unmapped.push({ ...group, reason: "unmapped_project" })
-      continue
-    }
-
-    group.harvest = { project: mapping.project, task: mapping.task }
-    const key = JSON.stringify([group.spentDate, mapping.project, mapping.task, group.activity])
+    const destination = timesheetDestination(group, mappings)
+    const key = JSON.stringify([group.spentDate, destination.project, destination.task])
     const entry = entries.get(key) ?? {
       spentDate: group.spentDate,
-      project: mapping.project,
-      task: mapping.task,
-      activity: group.activity,
+      project: destination.project,
+      task: destination.task,
+      destination: destination.label,
       milliseconds: 0,
       sources: [],
     }
@@ -425,17 +266,42 @@ function mappedEntries(groups, mappings, unmapped) {
   }
 
   return [...entries.values()]
-    .map(entry => {
-      const sources = entry.sources.sort(compareEvidenceSources)
-      return {
-        ...entry,
-        hours: displayHours(entry.milliseconds),
-        notes: `OMP Project Time activity: ${JSON.stringify(entry.activity)}\n${sources.map(source => `${source.project} (${source.repositoryId})`).join("; ")}`,
-        sources,
-      }
-    })
+    .map(entry => ({
+      ...entry,
+      hours: displayHours(entry.milliseconds),
+      sources: entry.sources.sort(compareEvidenceSources),
+    }))
     .filter(entry => entry.hours > 0)
-    .sort((left, right) => left.spentDate.localeCompare(right.spentDate) || left.project.localeCompare(right.project) || left.task.localeCompare(right.task) || left.activity.localeCompare(right.activity))
+    .sort((left, right) => left.spentDate.localeCompare(right.spentDate) || left.project.localeCompare(right.project) || left.task.localeCompare(right.task))
+}
+
+function timesheetDestination(group, mappings) {
+  const localProject = group.project || "Unlabelled Project Time project"
+  const attribution = group.workItemAttribution
+  const mapping = mappings.get(group.project)
+
+  if (attribution === "unassigned" || attribution === "ambiguous") {
+    return {
+      project: localProject,
+      task: "Review destination",
+      label: `Local Project Time project — ${attribution} work item; choose a Harvest project and task before submitting.`,
+    }
+  }
+
+  if (!mapping) {
+    return {
+      project: localProject,
+      task: "Review destination",
+      label: "Local Project Time project — no configured Harvest destination; choose a Harvest project and task before submitting.",
+    }
+  }
+
+  group.harvest = { project: mapping.project, task: mapping.task }
+  return {
+    project: mapping.project,
+    task: mapping.task,
+    label: "Configured Harvest destination",
+  }
 }
 
 function sessionRow(session) {
@@ -492,7 +358,7 @@ function compareGroups(left, right) {
     String(left.project).localeCompare(String(right.project)) ||
     String(left.repositoryId).localeCompare(String(right.repositoryId)) ||
     String(left.sourceKind).localeCompare(String(right.sourceKind)) ||
-    left.activity.localeCompare(right.activity) ||
+    String(left.activity ?? "").localeCompare(String(right.activity ?? "")) ||
     String(left.workItemAttribution ?? "").localeCompare(String(right.workItemAttribution ?? ""))
 }
 
@@ -505,10 +371,6 @@ function compareRows(left, right) {
     left.reason.localeCompare(right.reason)
 }
 
-export async function loadProjectTimeEntries({ from, to, mappings, logPath = defaultProjectTimeLogPath(), read = readFile }) {
-  const state = JSON.parse(await read(logPath, "utf8"))
-  return projectTimeEntries(state, mappings, { from, to })
-}
 
 function localDate(date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map(value => String(value).padStart(2, "0")).join("-")

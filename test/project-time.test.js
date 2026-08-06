@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createProjectTimeTool, createProjectTimeTransformTool } from "../index.js"
-import { approvedProjectTimeMappings, formatProjectTimeEntryDrafts, inferProjectTimeMappings, loadProjectTimeEntries, parseProjectTimeMappings, projectTimeEntries, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { createProjectTimeTransformTool } from "../index.js"
+import { formatProjectTimeEntryDrafts, parseProjectTimeMappings, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const schema = () => ({
   regex() { return this },
@@ -63,208 +63,66 @@ test("lists unique human-active local Project Time names", () => {
 
 
 
-test("infers reviewed Harvest mapping candidates deterministically", () => {
-  const analysis = inferProjectTimeMappings(
-    {
-      groups: [
-        { project: " wrap ", repositoryId: "hashed-repository", activity: "Implementation", sourceKind: "human_active", milliseconds: 7_200_000 },
-        { project: "WRAP", repositoryId: "hashed-repository", activity: "Planning", sourceKind: "human_active", milliseconds: 3_600_000 },
-        { project: "wrap", repositoryId: "hashed-repository", activity: "Review", sourceKind: "agent_turn_elapsed", milliseconds: 3_600_000 },
-        { project: "Unknown", repositoryId: "other-repository", activity: "Research", sourceKind: "human_active", milliseconds: 1_800_000 },
-      ],
-    },
-    {
-      assignments: [
-        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" } },
-        { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Meeting" } },
-      ],
-      entries: [
-        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" }, hours: 8 },
-        { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Programming" }, hours: 2 },
-        { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Meeting" }, hours: 1.5 },
-      ],
-    },
-  )
 
-  assert.deepEqual(analysis.excluded, { sourceKind: "agent_turn_elapsed", hours: 1 })
-  const wrapCandidate = analysis.candidates.find(candidate => candidate.source.project === " wrap ")
-  assert.deepEqual(wrapCandidate.source, { project: " wrap ", projects: [" wrap ", "WRAP"], repositoryIds: ["hashed-repository"], activities: ["Implementation", "Planning"], hours: 3 })
-  assert.equal(wrapCandidate.status, "suggested")
-  assert.deepEqual(wrapCandidate.candidates[0], {
-    project: { id: 1, name: "WRAP" },
-    task: { id: 10, name: "Programming" },
-    score: 113,
-    reasons: [
-      "Normalized local project \" wrap \" matches assigned Harvest project \"WRAP\".",
-      "2 historical entries (10h) for this project/task in the requested range.",
-    ],
-  })
-  assert.deepEqual(approvedProjectTimeMappings(analysis, [{ sourceProject: "WRAP", projectId: 1, taskId: 10 }]), { " wrap ": { project: "WRAP", task: "Programming" }, WRAP: { project: "WRAP", task: "Programming" } })
-  assert.throws(() => approvedProjectTimeMappings(analysis, [
-    { sourceProject: "WRAP", projectId: 1, taskId: 10 },
-    { sourceProject: " wrap ", projectId: 1, taskId: 10 },
-  ]), /approved more than once/)
-  assert.deepEqual(approvedProjectTimeMappings(analysis, [{ sourceProject: " wrap ", projectId: 1, taskId: 10 }]), { " wrap ": { project: "WRAP", task: "Programming" }, WRAP: { project: "WRAP", task: "Programming" } })
-  assert.throws(() => approvedProjectTimeMappings(analysis, [{ sourceProject: "Unknown", projectId: 1, taskId: 10 }]), /not an analysed Harvest candidate/)
-})
 
-test("marks equally scored assigned tasks as ambiguous", () => {
-  const analysis = inferProjectTimeMappings(
-    { groups: [{ project: "WRAP", sourceKind: "human_active", activity: "Implementation", milliseconds: 3_600_000 }] },
-    { assignments: [
-      { project: { id: 1, name: "WRAP" }, task: { id: 11, name: "Programming" } },
-      { project: { id: 1, name: "WRAP" }, task: { id: 10, name: "Meeting" } },
-    ], entries: [] },
-  )
-  assert.equal(analysis.candidates[0].status, "ambiguous")
-  assert.deepEqual(analysis.candidates[0].candidates.map(candidate => candidate.task.name), ["Meeting", "Programming"])
-})
 
-test("maps and splits Project Time sessions by local Harvest date", () => {
-  const mappings = parseProjectTimeMappings(JSON.stringify({
-    "Harvest API": { project: "Internal", task: "Development" },
-  }))
-  const startAtMs = new Date(2026, 6, 17, 23, 30).getTime()
-  const endAtMs = new Date(2026, 6, 18, 1, 30).getTime()
-
-  const plan = projectTimeEntries(
-    evidenceState([
-      { project: "Harvest API", repositoryId: "klondikemarlen/harvest-api-v2", sourceKind: "human_active", startAtMs, endAtMs },
-      { project: "Harvest API", repositoryId: "klondikemarlen/harvest-api-v2", sourceKind: "agent_turn_elapsed", startAtMs, endAtMs: endAtMs + 3_600_000 },
-    ]),
-    mappings,
-    { from: "2026-07-17", to: "2026-07-18" },
-  )
-
-  assert.equal(plan.sourceKind, "human_active")
-  assert.equal(plan.unmapped, 0)
-  assert.deepEqual(
-    plan.entries.map(({ spentDate, project, task, hours }) => ({ spentDate, project, task, hours })),
-    [
-      { spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 0.5 },
-      { spentDate: "2026-07-18", project: "Internal", task: "Development", hours: 1.5 },
-    ],
-  )
-  assert.match(plan.entries[0].notes, /Harvest API \(klondikemarlen\/harvest-api-v2\)/)
-})
-
-test("preserves versioned source evidence while leaving unassigned and ambiguous work unmapped", () => {
-  const startAtMs = new Date(2026, 6, 17, 9).getTime()
-  const source = (id, workItemAttribution, workItem, narrative) => ({
-    id,
-    sourceKind: "human_active",
-    project: "wrap",
-    repositoryId: "repository-id",
-    repositoryIdentity: "github.com/klondikemarlen/wrap",
-    activity: "Review",
-    workItemAttribution,
-    ...(workItem === undefined ? {} : { workItem }),
-    ...(narrative === undefined ? {} : { narrative }),
-    startAtMs,
-    endAtMs: startAtMs + 1_800_000,
-    createdAtMs: startAtMs + 1_800_000,
-  })
-  const workItem = { kind: "issue", number: 91, repository: "klondikemarlen/harvest-worklog", source: "user_provided" }
+test("creates a multi-project draft with configured and review-required destinations", () => {
+  const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
   const plan = projectTimeTransform(
     evidenceState([
-      source("entry-explicit", "explicit_prompt", workItem, { text: "Validated the versioned evidence contract.", source: "generated" }),
-      source("entry-carried", "carried_forward", workItem),
-      source("entry-unassigned", "unassigned"),
-      source("entry-ambiguous", "ambiguous"),
+      {
+        id: "entry-mapped",
+        project: "wrap",
+        repositoryId: "wrap-repository",
+        sourceKind: "human_active",
+        activity: "Implement",
+        workItemAttribution: "explicit_prompt",
+        startAtMs: at(9),
+        endAtMs: at(10),
+      },
+      {
+        id: "entry-unassigned",
+        project: "wrap",
+        repositoryId: "wrap-repository",
+        sourceKind: "human_active",
+        activity: "Review",
+        workItemAttribution: "unassigned",
+        startAtMs: at(10),
+        endAtMs: at(11),
+      },
+      {
+        id: "entry-unmapped-project",
+        project: "Administration",
+        repositoryId: "administration-repository",
+        sourceKind: "human_active",
+        workItemAttribution: "explicit_prompt",
+        startAtMs: at(11),
+        endAtMs: at(11, 45),
+      },
     ]),
     parseProjectTimeMappings({ wrap: { project: "WRAP", task: "Programming" } }),
     { from: "2026-07-17", to: "2026-07-17", applyMappings: true },
   )
 
   assert.deepEqual(
-    plan.entries[0].sources.map(({ id, sourceKind, project, repositoryId, repositoryIdentity, startAtMs, endAtMs, createdAtMs, narrative, workItem, workItemAttribution }) => ({ id, sourceKind, project, repositoryId, repositoryIdentity, startAtMs, endAtMs, createdAtMs, narrative, workItem, workItemAttribution })),
+    plan.entries.map(({ project, task, destination, hours }) => ({ project, task, destination, hours })),
     [
-      { id: "entry-carried", sourceKind: "human_active", project: "wrap", repositoryId: "repository-id", repositoryIdentity: "github.com/klondikemarlen/wrap", startAtMs, endAtMs: startAtMs + 1_800_000, createdAtMs: startAtMs + 1_800_000, narrative: undefined, workItem, workItemAttribution: "carried_forward" },
-      { id: "entry-explicit", sourceKind: "human_active", project: "wrap", repositoryId: "repository-id", repositoryIdentity: "github.com/klondikemarlen/wrap", startAtMs, endAtMs: startAtMs + 1_800_000, createdAtMs: startAtMs + 1_800_000, narrative: { text: "Validated the versioned evidence contract.", source: "generated" }, workItem, workItemAttribution: "explicit_prompt" },
+      { project: "Administration", task: "Review destination", destination: "Local Project Time project — no configured Harvest destination; choose a Harvest project and task before submitting.", hours: 0.75 },
+      { project: "wrap", task: "Review destination", destination: "Local Project Time project — unassigned work item; choose a Harvest project and task before submitting.", hours: 1 },
+      { project: "WRAP", task: "Programming", destination: "Configured Harvest destination", hours: 1 },
     ],
   )
-  assert.deepEqual(plan.unmapped.map(entry => [entry.reason, entry.sources.map(source => source.id)]), [
-    ["ambiguous_work_item", ["entry-ambiguous"]],
-    ["unassigned_work_item", ["entry-unassigned"]],
-  ])
   const draft = formatProjectTimeEntryDrafts(plan)
-  assert.match(draft, /source entry-explicit; source kind human_active; repository github\.com\/klondikemarlen\/wrap; task explicit_prompt issue #91 \(klondikemarlen\/harvest-worklog\); interval 2026-07-17T\d{2}:00:00\.000Z–2026-07-17T\d{2}:30:00\.000Z/)
-  assert.match(draft, /Narrative evidence \(review only\): Validated the versioned evidence contract\./)
-  assert.match(draft, /Unmapped automatic evidence \(not submittable\)[\s\S]*task ambiguous[\s\S]*ambiguous_work_item[\s\S]*task unassigned[\s\S]*unassigned_work_item/)
+  assert.match(draft, /Project: Administration\nTask: Review destination\nDestination: Local Project Time project/)
+  assert.match(draft, /Project: WRAP\nTask: Programming\nDestination: Configured Harvest destination/)
+  assert.match(draft, /Project: wrap\nTask: Review destination\nDestination: Local Project Time project — unassigned work item/)
+  assert.match(draft, /source entry-mapped/)
+  assert.match(draft, /source entry-unassigned/)
+  assert.match(draft, /source entry-unmapped-project/)
 })
 
-test("rejects unsupported Project Time evidence before a dry-run preflight", async () => {
-  const calls = []
-  const preview = createProjectTimeTool(z, {
-    loadEntries: options => loadProjectTimeEntries({
-      ...options,
-      read: async () => JSON.stringify({ format: "omp-project-time/evidence", version: "1", entries: [] }),
-    }),
-    run: async (...args) => {
-      calls.push(args)
-      return { code: 0, stdout: "", stderr: "" }
-    },
-  })
 
-  const result = await preview.execute("call-1", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
 
-  assert.match(result.content[0].text, /Unsupported OMP Project Time evidence format/)
-  assert.deepEqual(calls, [])
-})
-
-test("aggregates mapped sources before ordinary import", () => {
-  const at = hour => new Date(2026, 6, 17, hour).getTime()
-  const plan = projectTimeEntries(
-    evidenceState([
-      { project: "wrap", repositoryId: "repo-a", sourceKind: "human_active", startAtMs: at(9), endAtMs: at(10) },
-      { project: "wrap", repositoryId: "repo-b", sourceKind: "human_active", startAtMs: at(10), endAtMs: at(11) },
-    ]),
-    parseProjectTimeMappings(JSON.stringify({ wrap: { project: "WRAP", task: "Programming" } })),
-    { from: "2026-07-17", to: "2026-07-17" },
-  )
-
-  assert.deepEqual(
-    plan.entries,
-    [{ spentDate: "2026-07-17", project: "WRAP", task: "Programming", notes: "OMP Project Time: wrap (repo-a); wrap (repo-b)", milliseconds: 7_200_000, hours: 2 }],
-  )
-})
-
-test("previews inferred Project Time entries without writing", async () => {
-  const calls = []
-  const loads = []
-  const preview = createProjectTimeTool(z, {
-    command: " ",
-    projectTimeMappings: JSON.stringify({
-      "Harvest API": { project: "Internal", task: "Development" },
-    }),
-    projectTimeLogPath: " ",
-    loadEntries: async options => {
-      loads.push(options)
-      return {
-        entries: [{ spentDate: "2026-07-17", project: "Internal", task: "Development", hours: 1.25, notes: "OMP Project Time: Harvest API (repo)" }],
-        unmapped: 1,
-      }
-    },
-    run: async (...args) => {
-      calls.push(args)
-      return { code: 0, stdout: "Would create 2026-07-17", stderr: "" }
-    },
-  })
-
-  const result = await preview.execute("call-1", { from: "2026-07-17", to: "2026-07-17" }, undefined, undefined, { cwd: "/tmp" })
-
-  assert.equal(loads[0].logPath, undefined)
-  assert.equal(preview.approval, "read")
-  assert.deepEqual(calls, [[
-    "harvest-worklog",
-    ["work-entry", "2026-07-17", "--project", "Internal", "--task", "Development", "--hours", "1.25", "--notes", "OMP Project Time: Harvest API (repo)", "--dry-run"],
-    { cwd: "/tmp", signal: undefined },
-  ]])
-  assert.match(result.content[0].text, /Would create 2026-07-17/)
-  assert.match(result.content[0].text, /Source policy: human_active local Project Time intervals only\./)
-  assert.equal(result.details.sourceKind, "human_active")
-  assert.match(result.content[0].text, /Skipped 1 unmapped session/)
-})
 
 test("filters, groups, maps, and reports Project Time transforms deterministically", () => {
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
@@ -298,13 +156,12 @@ test("filters, groups, maps, and reports Project Time transforms deterministical
     ],
   )
   assert.deepEqual(
-    plan.entries.map(({ spentDate, project, task, activity, hours }) => ({ spentDate, project, task, activity, hours })),
+    plan.entries.map(({ spentDate, project, task, destination, hours }) => ({ spentDate, project, task, destination, hours })),
     [
-      { spentDate: "2026-07-17", project: "Internal", task: "Development", activity: "implementation", hours: 1 },
-      { spentDate: "2026-07-17", project: "Internal", task: "Development", activity: "unlabelled", hours: 0.25 },
+      { spentDate: "2026-07-17", project: "Internal", task: "Development", destination: "Configured Harvest destination", hours: 1.25 },
+      { spentDate: "2026-07-17", project: "Other", task: "Review destination", destination: "Local Project Time project — no configured Harvest destination; choose a Harvest project and task before submitting.", hours: 0.5 },
     ],
   )
-  assert.deepEqual(plan.unmapped.map(({ activity, reason }) => ({ activity, reason })), [{ activity: "review", reason: "unmapped_project" }])
   assert.deepEqual(plan.excluded.map(({ activity, reason }) => ({ activity, reason })), [
     { activity: "implementation", reason: "source_kind" },
     { activity: "invalid", reason: "invalid_interval" },

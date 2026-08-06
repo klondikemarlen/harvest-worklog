@@ -16,6 +16,9 @@ class HarvestWorklogTest < Minitest::Test
     assert_equal 0, HarvestWorklog::CLI.run(["--help"], output:)
     assert_includes output.string, "time-off FROM TO --project-id ID --task-id ID"
     assert_includes output.string, "work-entry DATE --project-id ID --task-id ID"
+    refute_includes output.string, "timesheet"
+    refute_includes output.string, "aggregate"
+    refute_includes output.string, "reconcile"
   end
 
   def test_dates_between_skips_weekends_by_default
@@ -75,27 +78,6 @@ class HarvestWorklogTest < Minitest::Test
     assert_includes invalid_id_error.string, "supply --project and --task"
   end
 
-  def test_read_commands_reject_blank_filters
-    aggregate_error = StringIO.new
-    timesheet_project_error = StringIO.new
-    timesheet_task_error = StringIO.new
-
-    assert_equal 1, HarvestWorklog::AggregateCLI.run(
-      ["2026-07-17", "2026-07-17", "--project", " "],
-      error: aggregate_error
-    )
-    assert_includes aggregate_error.string, "--project must not be blank"
-    assert_equal 1, HarvestWorklog::TimesheetCLI.run(
-      ["today", "--project", " "],
-      error: timesheet_project_error
-    )
-    assert_includes timesheet_project_error.string, "--project is required"
-    assert_equal 1, HarvestWorklog::TimesheetCLI.run(
-      ["today", "--project", "WRAP", "--task", " "],
-      error: timesheet_task_error
-    )
-    assert_includes timesheet_task_error.string, "--task must not be blank"
-  end
 
   def test_dry_run_accepts_hours_notes_and_named_assignment
     output = StringIO.new
@@ -276,232 +258,16 @@ class HarvestWorklogTest < Minitest::Test
     assert_equal ["OMP Project Time activity: \"implementation\"\nHarvest API (repo)", "OMP Project Time activity: \"review\"\nHarvest API (repo)"], client.entries.map { |entry| entry.fetch(:notes) }
   end
 
-  def test_mapping_data_cli_prints_assignments_and_historical_entries
-    output = StringIO.new
-    client = MappingDataClient.new(
-      [{ "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }],
-      [{ "spent_date" => "2026-07-17", "hours" => 2.5, "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }]
-    )
 
-    assert_equal 0, HarvestWorklog::CLI.run(["mapping-data", "2026-07-17", "2026-07-17"], output:, client:)
-    assert_equal(
-      {
-        "assignments" => [{ "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }],
-        "entries" => [{ "hours" => 2.5, "project" => { "id" => 1, "name" => "WRAP" }, "task" => { "id" => 2, "name" => "Programming" } }]
-      },
-      JSON.parse(output.string)
-    )
-    assert_equal [{ method: :get, path: "/v2/time_entries", params: { from: "2026-07-17", to: "2026-07-17", page: 1, per_page: 100 } }], client.requests
-  end
 
-  def test_timesheet_cli_prints_project_tasks_and_multiline_notes
-    client = AggregateClient.new([{ "time_entries" => [
-      { "spent_date" => "2026-07-17", "hours" => 2, "notes" => "fixing tests\nstarting templates", "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
-      { "spent_date" => "2026-07-17", "hours" => 1.5, "notes" => "reviewing PRs", "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
-      { "spent_date" => "2026-07-17", "hours" => 0.5, "notes" => nil, "project" => { "name" => "WRAP" }, "task" => { "name" => "Meeting" } },
-      { "spent_date" => "2026-07-17", "hours" => 9, "notes" => "excluded", "project" => { "name" => "Other" }, "task" => { "name" => "Programming" } }
-    ], "next_page" => nil }])
-    output = StringIO.new
 
-    status = HarvestWorklog::CLI.run(["timesheet", "2026-07-17", "--project", "wrap"], output:, client:)
 
-    assert_equal 0, status
-    assert_equal <<~OUTPUT, output.string
-      WRAP · Fri, Jul 17 · 4h
 
-      Meeting · 0.5h
-        (no notes)
 
-      Programming · 3.5h
-        2h
-          fixing tests
-          starting templates
-        1.5h
-          reviewing PRs
-    OUTPUT
-    assert_equal [
-      { method: :get, path: "/v2/users/me", params: {} },
-      { method: :get, path: "/v2/time_entries", params: { from: "2026-07-17", to: "2026-07-17", page: 1, per_page: 100, user_id: 42 } }
-    ], client.requests
-  end
 
-  def test_timesheet_cli_resolves_relative_dates_and_reports_empty_days
-    today = Date.new(2026, 7, 17)
-    output = StringIO.new
 
-    status = HarvestWorklog::TimesheetCLI.run(["yesterday", "--project", "WRAP"], output:, client: AggregateClient.new([{ "time_entries" => [], "next_page" => nil }]), today:)
 
-    assert_equal Date.new(2026, 7, 17), HarvestWorklog::TimesheetCLI.resolve_date("today", today:)
-    assert_equal Date.new(2026, 7, 16), HarvestWorklog::TimesheetCLI.resolve_date("yesterday", today:)
-    assert_equal Date.new(2026, 7, 15), HarvestWorklog::TimesheetCLI.resolve_date("2026-07-15", today:)
-    assert_equal 0, status
-    assert_equal "WRAP · Thu, Jul 16 · 0h\n\nNo time entries.\n", output.string
-  end
 
-  def test_timesheet_cli_filters_to_one_task
-    output = StringIO.new
-    client = AggregateClient.new([{ "time_entries" => [
-      { "spent_date" => "2026-07-17", "hours" => 2, "notes" => "build", "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
-      { "spent_date" => "2026-07-17", "hours" => 1, "notes" => "plan", "project" => { "name" => "WRAP" }, "task" => { "name" => "Meeting" } }
-    ], "next_page" => nil }])
-
-    status = HarvestWorklog::TimesheetCLI.run(["today", "--project", "WRAP", "--task", "Programming"], output:, client:, today: Date.new(2026, 7, 17))
-
-    assert_equal 0, status
-    assert_equal "WRAP · Fri, Jul 17 · 2h\n\nProgramming · 2h\n  build\n", output.string
-  end
-
-  def test_aggregate_cli_paginates_filters_and_shows_empty_dates
-    client = AggregateClient.new(
-      [
-        {
-          "time_entries" => [
-            { "spent_date" => "2026-07-17", "hours" => 7, "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
-            { "spent_date" => "2026-07-19", "hours" => 1.5, "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } },
-            { "spent_date" => "2026-07-17", "hours" => 0.5, "project" => { "name" => "WRAP" }, "task" => { "name" => "Meeting" } }
-          ],
-          "next_page" => 2
-        },
-        {
-          "time_entries" => [
-            { "spent_date" => "2026-07-18", "hours" => 2, "project" => { "name" => "Travel" }, "task" => { "name" => "Programming" } }
-          ],
-          "next_page" => nil
-        }
-      ]
-    )
-    output = StringIO.new
-
-    status = HarvestWorklog::CLI.run(
-      ["aggregate", "2026-07-17", "2026-07-19", "--project", "WRAP", "--task", "Programming"],
-      output:,
-      client:
-    )
-
-    assert_equal 0, status
-    assert_equal(
-      [
-        { method: :get, path: "/v2/time_entries", params: { from: "2026-07-17", to: "2026-07-19", page: 1, per_page: 100 } },
-        { method: :get, path: "/v2/time_entries", params: { from: "2026-07-17", to: "2026-07-19", page: 2, per_page: 100 } }
-      ],
-      client.requests
-    )
-    assert_equal <<~OUTPUT, output.string
-      2 entries, 8.5h from 2026-07-17 through 2026-07-19
-      By date:
-        2026-07-17: 1 entry, 7h
-        2026-07-18: 0 entries, 0h
-        2026-07-19: 1 entry, 1.5h
-      By project/task:
-        WRAP / Programming: 2 entries, 8.5h
-    OUTPUT
-  end
-
-  def test_aggregate_cli_reports_empty_range
-    output = StringIO.new
-
-    status = HarvestWorklog::CLI.run(
-      ["aggregate", "2026-07-18", "2026-07-19"],
-      output:,
-      client: AggregateClient.new([{ "time_entries" => [], "next_page" => nil }])
-    )
-
-    assert_equal 0, status
-    assert_equal <<~OUTPUT, output.string
-      0 entries, 0h from 2026-07-18 through 2026-07-19
-      By date:
-        2026-07-18: 0 entries, 0h
-        2026-07-19: 0 entries, 0h
-      By project/task:
-        none
-    OUTPUT
-  end
-
-  def test_reconcile_cli_reports_harvest_benchmark_and_local_overlap
-    start_at = Time.local(2026, 7, 17, 9).to_f * 1000
-    output = StringIO.new
-    client = AggregateClient.new([{ "time_entries" => [
-      { "spent_date" => "2026-07-17", "hours" => 7, "project" => { "name" => "WRAP" }, "task" => { "name" => "Programming" } }
-    ], "next_page" => nil }])
-
-    with_project_time_log([
-      { "project" => "wrap", "sourceKind" => "human_active", "startAtMs" => start_at, "endAtMs" => start_at + 7_200_000 },
-      { "project" => "wrap", "sourceKind" => "human_active", "startAtMs" => start_at + 5_400_000, "endAtMs" => start_at + 9_000_000 },
-      { "project" => "wrap", "sourceKind" => "agent_turn_elapsed", "startAtMs" => start_at, "endAtMs" => start_at + 25_200_000 }
-    ]) do |log_path|
-      status = HarvestWorklog::ReconcileCLI.run(
-        ["2026-07-17", "--project", "wrap", "--harvest-project", "WRAP", "--task", "Programming"],
-        output:,
-        client:,
-        log_path:
-      )
-
-      assert_equal 0, status
-    end
-
-    assert_equal <<~OUTPUT, output.string
-      2026-07-17 reconciliation
-      Manual Harvest: 7h 0m 0s (1 entry)
-      Local OMP Project Time wrap:
-        Raw intervals: 3h 0m 0s
-        Non-overlapping union: 2h 30m 0s
-        Concurrent overlap: 0h 30m 0s
-      Harvest minus local raw: +4h 0m 0s
-      Harvest minus local union: +4h 30m 0s
-      Verdict: Manual Harvest is the benchmark. This read-only comparison creates or changes no entries.
-    OUTPUT
-  end
-
-  def test_reconcile_cli_rounds_milliseconds_to_nearest_second
-    assert_equal "1h 0m 1s", HarvestWorklog::ReconcileCLI.duration(3_600_600)
-    assert_equal "0h 0m 0s", HarvestWorklog::ReconcileCLI.signed_duration(-400)
-  end
-
-  def test_reconcile_cli_reports_empty_harvest_and_local_data
-    output = StringIO.new
-
-    with_project_time_log([]) do |log_path|
-      status = HarvestWorklog::ReconcileCLI.run(
-        ["2026-07-17", "--project", "wrap", "--harvest-project", "WRAP"],
-        output:,
-        client: AggregateClient.new([{ "time_entries" => [], "next_page" => nil }]),
-        log_path:
-      )
-
-      assert_equal 0, status
-    end
-
-    assert_includes output.string, "Manual Harvest: 0h 0m 0s (0 entries)"
-    assert_includes output.string, "Raw intervals: 0h 0m 0s"
-    assert_includes output.string, "Harvest minus local union: 0h 0m 0s"
-  end
-
-  def test_reconcile_cli_reports_a_malformed_local_log
-    error = StringIO.new
-
-    Dir.mktmpdir do |directory|
-      path = File.join(directory, "time-log.json")
-      File.write(path, JSON.generate([]))
-      status = HarvestWorklog::ReconcileCLI.run(
-        ["2026-07-17", "--project", "wrap", "--harvest-project", "WRAP"],
-        error:,
-        client: AggregateClient.new([{ "time_entries" => [], "next_page" => nil }]),
-        log_path: path
-      )
-
-      assert_equal 1, status
-    end
-
-    assert_includes error.string, "OMP Project Time log is missing an entries array"
-  end
-
-  def with_project_time_log(entries)
-    Dir.mktmpdir do |directory|
-      path = File.join(directory, "time-log.json")
-      File.write(path, JSON.generate({ "entries" => entries }))
-      yield path
-    end
-  end
 
   class FakeClient
     attr_reader :assignment_source, :entries, :requests
@@ -528,39 +294,5 @@ class HarvestWorklogTest < Minitest::Test
     end
   end
 
-  class AggregateClient
-    attr_reader :requests
 
-    def initialize(pages, current_user_id: 42)
-      @pages = pages
-      @current_user_id = current_user_id
-      @requests = []
-    end
-
-    def request(method, path, params:)
-      @requests << { method:, path:, params: }
-      return { "id" => @current_user_id } if path == "/v2/users/me"
-
-      @pages.fetch(params.fetch(:page) - 1)
-    end
-  end
-
-  class MappingDataClient
-    attr_reader :requests
-
-    def initialize(assignments, entries)
-      @assignments = assignments
-      @entries = entries
-      @requests = []
-    end
-
-    def active_personal_task_assignments
-      @assignments
-    end
-
-    def request(method, path, params:)
-      @requests << { method:, path:, params: }
-      { "time_entries" => @entries, "next_page" => nil }
-    end
-  end
 end
