@@ -1,6 +1,6 @@
 {
   "name": "harvest-worklog",
-  "version": "0.13.12",
+  "version": "0.13.13",
   "description": "Project Time work-timesheet drafts with manual Harvest writes.",
   "type": "module",
   "license": "MIT",
@@ -46,11 +46,11 @@
       "projectTimeLogPath": {
         "type": "string",
         "default": "",
-        "description": "Optional path to OMP Project Time's time-log.json; defaults to ~/.omp/project-time/time-log.json."
+        "description": "Optional Project Time evidence path; defaults to ~/.omp/project-time/time-log.sqlite. A legacy v1 JSON snapshot is also supported."
       }
     }
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   }
 }
