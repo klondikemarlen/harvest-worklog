@@ -166,18 +166,16 @@ test("creates a multi-project draft with configured and review-required destinat
 
 test("caps interactive timesheet summaries at thirty lines", () => {
   const output = formatProjectTimeCommandSummary({
-    entries: Array.from({ length: 40 }, (_, index) => ({
+    groups: Array.from({ length: 40 }, (_, index) => ({
       spentDate: "2026-07-20",
-      project: "wrap",
-      task: index === 0 ? `Task ${index}\nhidden` : `Task ${index}`,
-      destination: index === 0 ? "Configured\nHarvest destination" : "Configured Harvest destination",
+      project: index === 0 ? "wrap 0\nhidden" : `wrap ${index}`,
       milliseconds: 60_000,
     })),
   })
 
-  assert.equal(output.split("\n").length, 30)
-  assert.match(output, /Project: wrap \| Task: Task 0 hidden \| Duration: 0:01 \| Review: Configured Harvest destination/)
-  assert.match(output, /12 additional drafts omitted; use harvest_preview_project_time_drafts for detailed review\./)
+  assert.equal(output.split("\n").length, 22)
+  assert.match(output, /Date: 2026-07-20 \| Project: wrap 0 hidden \| Duration: 0:01/)
+  assert.match(output, /20 additional totals omitted; use harvest_preview_project_time_drafts for detailed review\./)
 })
 
 

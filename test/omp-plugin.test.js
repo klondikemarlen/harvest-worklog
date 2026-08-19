@@ -301,7 +301,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
             endAtMs: new Date(2026, 6, 20, 15, 40, 40).getTime(),
             segmentStartAtMs: new Date(2026, 6, 20, 9).getTime(),
             segmentEndAtMs: new Date(2026, 6, 20, 15, 40, 40).getTime(),
-            narrative: { text: "Fixed the project test suite." },
+            narrative: { text: "Fixed the project test suite for WRAP-123." },
             milliseconds: 24_040_000,
           }],
         }],
@@ -342,14 +342,17 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: WRAP \(YG - SIS\) \| Task: Programming \| Duration: 6:40:40 \| Review: Configured Harvest destination/)
-  assert.doesNotMatch(messages[0].message.content, /Work items|Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
-  assert.equal(messages.length, 2)
+  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: WRAP \(YG - SIS\) \| Duration: 6:40:40/)
+  assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
+  assert.equal(messages.length, 3)
   assert.equal(messages[1].message.customType, "harvest-worklog-timesheet")
-  assert.equal(messages[1].message.content.split("\n").length <= 30, true)
+  assert.equal(messages[1].message.content.split("\n").length <= 22, true)
   assert.deepEqual(messages[1].options, { triggerTurn: false })
+  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet-summary-request")
+  assert.match(messages[2].message.content, /"references":\["GitHub #91","Jira WRAP-123"\]/)
+  assert.deepEqual(messages[2].options, { triggerTurn: true, deliverAs: "nextTurn" })
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 2)
+  assert.equal(messages.length, 3)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [

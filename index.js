@@ -7,6 +7,7 @@ import {
   loadProjectTimeTransform,
   parseProjectTimeMappings,
   projectTimeProjectNames,
+  projectTimeSummaryPrompt,
   readProjectTimeState,
   resolveProjectTimeDate,
 } from "./project-time.js"
@@ -406,6 +407,16 @@ export function parseHarvestWorklogArguments(args) {
 }
 
 
+function requestProjectTimeSummary(pi, ctx, plan) {
+  if (!ctx.model) return
+  pi.sendMessage({
+    customType: "harvest-worklog-timesheet-summary-request",
+    content: projectTimeSummaryPrompt(plan),
+    display: false,
+    attribution: "assistant",
+  }, { triggerTurn: true, deliverAs: "nextTurn" })
+}
+
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Worklog")
   const command = normalizeCommand(options.command)
@@ -442,6 +453,7 @@ export default function harvestTimeExtension(pi, options = {}) {
           display: true,
           attribution: "assistant",
         }, { triggerTurn: false })
+        requestProjectTimeSummary(pi, ctx, plan)
       } catch (error) {
         ctx.ui.notify(`Could not read OMP Project Time: ${error.message}`, "error")
       }
