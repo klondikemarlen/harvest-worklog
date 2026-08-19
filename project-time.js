@@ -121,26 +121,22 @@ export function projectTimeTransform(
   }
 
   const grouped = new Map()
-  const excluded = []
 
   for (const session of entries) {
-    const row = sessionRow(session)
-    if (!session || !Number.isFinite(session.startAtMs) || !Number.isFinite(session.endAtMs) || session.startAtMs >= session.endAtMs) {
-      excluded.push({ ...row, reason: "invalid_interval" })
-      continue
-    }
+    if (
+      !session ||
+      !Number.isFinite(session.startAtMs) ||
+      !Number.isFinite(session.endAtMs) ||
+      session.startAtMs >= session.endAtMs
+    ) continue
 
-    const reasons = []
-    if (repositoryId !== undefined && session.repositoryId !== repositoryId) reasons.push("repository_id")
-    if (project !== undefined && session.project !== project) reasons.push("project")
-    if (sourceKind !== undefined && session.sourceKind !== sourceKind) reasons.push("source_kind")
-    if (reasons.length > 0) {
-      excluded.push({ ...row, reason: reasons.join(",") })
-      continue
-    }
+    if (
+      (repositoryId !== undefined && session.repositoryId !== repositoryId) ||
+      (project !== undefined && session.project !== project) ||
+      (sourceKind !== undefined && session.sourceKind !== sourceKind)
+    ) continue
 
     let cursor = session.startAtMs
-    let included = false
     while (cursor < session.endAtMs) {
       const date = new Date(cursor)
       const spentDate = localDate(date)
@@ -165,11 +161,9 @@ export function projectTimeTransform(
         entry.milliseconds += source.milliseconds
         entry.sources.push(source)
         grouped.set(key, entry)
-        included = true
       }
       cursor = segmentEnd
     }
-    if (!included) excluded.push({ ...row, reason: "date_range" })
   }
 
   const groups = [...grouped.values()]
@@ -181,7 +175,6 @@ export function projectTimeTransform(
     sourceKind,
     groups,
     entries: timesheetDraftEntries,
-    excluded: excluded.sort(compareRows),
   }
 }
 
@@ -248,13 +241,6 @@ export function formatProjectTimeEntryDrafts(plan) {
       ...[...draft.sources.values()].sort(compareGroups).map(formatDraftEvidence),
     ].join("\n"))
   if (sections.length === 0) sections.push("No local Project Time evidence found.")
-  const excluded = plan.excluded ?? []
-  if (excluded.length > 0) {
-    sections.push([
-      "Excluded Project Time evidence",
-      ...excluded.map(formatDraftEvidence),
-    ].join("\n"))
-  }
 
   return [
     `Source policy: ${plan.sourceKind ?? "human_active"} local Project Time intervals only.`,
@@ -353,23 +339,6 @@ function timesheetDestination(group, mappings) {
   }
 }
 
-function sessionRow(session) {
-  return {
-    id: session?.id ?? null,
-    repositoryId: session?.repositoryId ?? null,
-    ...(session?.repositoryIdentity === undefined ? {} : { repositoryIdentity: session.repositoryIdentity }),
-    project: session?.project ?? null,
-    sourceKind: session?.sourceKind ?? null,
-    activity: typeof session?.activity === "string" && session.activity.length > 0 ? session.activity : "unlabelled",
-    ...(session?.narrative === undefined ? {} : { narrative: session.narrative }),
-    ...(session?.workItem === undefined ? {} : { workItem: session.workItem }),
-    ...(session?.workItemAttribution === undefined ? {} : { workItemAttribution: session.workItemAttribution }),
-    startAtMs: session?.startAtMs ?? null,
-    endAtMs: session?.endAtMs ?? null,
-    createdAtMs: session?.createdAtMs ?? null,
-  }
-}
-
 function projectTimeEvidenceSegment(session, spentDate, segmentStartAtMs, segmentEndAtMs) {
   return {
     id: session.id,
@@ -410,16 +379,6 @@ function compareGroups(left, right) {
     String(left.activity ?? "").localeCompare(String(right.activity ?? "")) ||
     String(left.workItemAttribution ?? "").localeCompare(String(right.workItemAttribution ?? ""))
 }
-
-function compareRows(left, right) {
-  return String(left.startAtMs).localeCompare(String(right.startAtMs)) ||
-    String(left.endAtMs).localeCompare(String(right.endAtMs)) ||
-    String(left.project).localeCompare(String(right.project)) ||
-    String(left.repositoryId).localeCompare(String(right.repositoryId)) ||
-    String(left.sourceKind).localeCompare(String(right.sourceKind)) ||
-    left.reason.localeCompare(right.reason)
-}
-
 
 function localDate(date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map(value => String(value).padStart(2, "0")).join("-")

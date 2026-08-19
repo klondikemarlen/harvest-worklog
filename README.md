@@ -87,7 +87,7 @@ Harvest Worklog reads Project Time's persisted `omp-project-time/evidence` v1 en
 
 ### Activity transforms
 
-`harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. It defaults to `human_active` and returns the effective top-level `sourceKind`; selecting `agent_turn_elapsed` requires an explicit source-kind request. Set `applyMappings` to create configured Harvest destinations or review-required local destinations for every included group. The output reports groups, draft entries, and excluded rows; it never writes Harvest.
+`harvest_preview_project_time_transforms` emits deterministic JSON for local raw intervals. It accepts an inclusive date range and optional exact `repositoryId`, `project`, and `sourceKind` filters; each matching interval is split by local date and grouped by activity, with missing labels reported as `unlabelled`. It defaults to `human_active` and returns the effective top-level `sourceKind`; selecting `agent_turn_elapsed` requires an explicit source-kind request. Set `applyMappings` to create configured Harvest destinations or review-required local destinations for every included group. The output reports groups and draft entries; it never writes Harvest.
 
 
 

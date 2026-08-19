@@ -164,11 +164,9 @@ test("creates a multi-project draft with configured and review-required destinat
   assert.match(draft, /source entry-unmapped-project/)
 })
 
-
-
-
-test("filters, groups, maps, and reports Project Time transforms deterministically", () => {
+test("filters, groups, maps, and limits Project Time transforms to the requested scope", () => {
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
+  const nextDay = new Date(2026, 6, 18, 9).getTime()
   const mappings = parseProjectTimeMappings(JSON.stringify({
     "Harvest API": { project: "Internal", task: "Development" },
   }))
@@ -179,11 +177,12 @@ test("filters, groups, maps, and reports Project Time transforms deterministical
     { project: "Other", repositoryId: "repo", sourceKind: "human_active", activity: "review", startAtMs: at(12), endAtMs: at(12, 30) },
     { project: "Harvest API", repositoryId: "repo", sourceKind: "idle", activity: "implementation", startAtMs: at(13), endAtMs: at(13, 30) },
     { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "invalid", startAtMs: at(14), endAtMs: at(14) },
+    { project: "Harvest API", repositoryId: "repo", sourceKind: "human_active", activity: "out-of-range", startAtMs: nextDay, endAtMs: nextDay + 1_800_000 },
   ])
   const options = {
     from: "2026-07-17",
     to: "2026-07-17",
-    repositoryId: "repo",
+    project: "Harvest API",
     sourceKind: "human_active",
     applyMappings: true,
   }
@@ -195,20 +194,20 @@ test("filters, groups, maps, and reports Project Time transforms deterministical
     [
       { spentDate: "2026-07-17", activity: "implementation", hours: 1, harvest: { project: "Internal", task: "Development" } },
       { spentDate: "2026-07-17", activity: "unlabelled", hours: 0.25, harvest: { project: "Internal", task: "Development" } },
-      { spentDate: "2026-07-17", activity: "review", hours: 0.5, harvest: null },
     ],
   )
   assert.deepEqual(
     plan.entries.map(({ spentDate, project, task, destination, hours }) => ({ spentDate, project, task, destination, hours })),
     [
       { spentDate: "2026-07-17", project: "Internal", task: "Development", destination: "Configured Harvest destination", hours: 1.25 },
-      { spentDate: "2026-07-17", project: "Other", task: "Review destination", destination: "Local Project Time project — no configured Harvest destination; choose a Harvest project and task before submitting.", hours: 0.5 },
     ],
   )
-  assert.deepEqual(plan.excluded.map(({ activity, reason }) => ({ activity, reason })), [
-    { activity: "implementation", reason: "source_kind" },
-    { activity: "invalid", reason: "invalid_interval" },
-  ])
+  assert.equal("excluded" in plan, false)
+  const draft = formatProjectTimeEntryDrafts({
+    ...plan,
+    excluded: [{ project: "unrelated", repositoryId: "other", milliseconds: 0, reason: "date_range" }],
+  })
+  assert.doesNotMatch(draft, /Excluded Project Time evidence|unrelated/)
   assert.equal(JSON.stringify(plan), JSON.stringify(projectTimeTransform(state, mappings, options)))
 })
 
@@ -231,7 +230,7 @@ test("defaults transforms to human-active intervals", () => {
   assert.equal(explicitPlan.sourceKind, "agent_turn_elapsed")
   assert.deepEqual(defaultPlan.groups, [])
   assert.deepEqual(defaultPlan.entries, [])
-  assert.deepEqual(defaultPlan.excluded.map(({ reason }) => reason), ["source_kind"])
+  assert.equal("excluded" in defaultPlan, false)
   assert.deepEqual(explicitPlan.entries.map(({ hours }) => hours), [1])
 })
 
