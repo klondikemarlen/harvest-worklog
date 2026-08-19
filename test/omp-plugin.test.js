@@ -323,7 +323,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE \[--project PROJECT\]/)
 
   await command.handler("timesheet 2026-07-20", { cwd: "/tmp", ui })
-  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui })
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {} })
   assert.deepEqual(transformLoads, [
     {
       from: "2026-07-20",
@@ -342,10 +342,15 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Destination: Configured Harvest destination\nDuration: 6:40:40/)
-  assert.doesNotMatch(messages[1].message.content, /Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
+  assert.match(messages[0].message.content, /Project: WRAP \(YG - SIS\)\nDuration: 6:40:40\nWork items\n- Issue #91 \(klondikemarlen\/harvest-worklog\) · 6:40:40\nReview: Configured Harvest destination/)
+  assert.doesNotMatch(messages[0].message.content, /Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
+  assert.match(messages[1].message.content, /AI-generated summary unavailable: no active OMP model/)
+  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet")
+  assert.equal(messages[3].message.display, false)
+  assert.match(messages[3].message.content, /AI-generated work summary \(review before use\).*Suggested Harvest note \(review before use\)/s)
+  assert.deepEqual(messages[3].options, { triggerTurn: true, deliverAs: "nextTurn" })
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 2)
+  assert.equal(messages.length, 4)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
