@@ -7,7 +7,6 @@ import {
   loadProjectTimeTransform,
   parseProjectTimeMappings,
   projectTimeProjectNames,
-  projectTimeSummaryPrompt,
   readProjectTimeState,
   resolveProjectTimeDate,
 } from "./project-time.js"
@@ -406,33 +405,6 @@ export function parseHarvestWorklogArguments(args) {
   return help ? { help: true } : { argv: words }
 }
 
-function requestProjectTimeSummary(pi, ctx, plan) {
-  if (!ctx.model) {
-    pi.sendMessage({
-      customType: "harvest-worklog-timesheet-summary",
-      content: "AI-generated summary unavailable: no active OMP model. Review the detailed Project Time preview before recording time.",
-      display: true,
-      attribution: "assistant",
-    }, { triggerTurn: false })
-    return
-  }
-
-  try {
-    pi.sendMessage({
-      customType: "harvest-worklog-timesheet-summary-request",
-      content: projectTimeSummaryPrompt(plan),
-      display: false,
-      attribution: "assistant",
-    }, { triggerTurn: true, deliverAs: "nextTurn" })
-  } catch {
-    pi.sendMessage({
-      customType: "harvest-worklog-timesheet-summary",
-      content: "AI-generated summary unavailable. Review the detailed Project Time preview before recording time.",
-      display: true,
-      attribution: "assistant",
-    }, { triggerTurn: false })
-  }
-}
 
 export default function harvestTimeExtension(pi, options = {}) {
   pi.setLabel?.("Harvest Worklog")
@@ -470,7 +442,6 @@ export default function harvestTimeExtension(pi, options = {}) {
           display: true,
           attribution: "assistant",
         }, { triggerTurn: false })
-        requestProjectTimeSummary(pi, ctx, plan)
       } catch (error) {
         ctx.ui.notify(`Could not read OMP Project Time: ${error.message}`, "error")
       }

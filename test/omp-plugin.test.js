@@ -342,15 +342,14 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Project: WRAP \(YG - SIS\)\nDuration: 6:40:40\nWork items\n- Issue #91 \(klondikemarlen\/harvest-worklog\) · 6:40:40\nReview: Configured Harvest destination/)
-  assert.doesNotMatch(messages[0].message.content, /Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
-  assert.match(messages[1].message.content, /AI-generated summary unavailable: no active OMP model/)
-  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet")
-  assert.equal(messages[3].message.display, false)
-  assert.match(messages[3].message.content, /AI-generated work summary \(review before use\).*Suggested Harvest note \(review before use\)/s)
-  assert.deepEqual(messages[3].options, { triggerTurn: true, deliverAs: "nextTurn" })
+  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: WRAP \(YG - SIS\) \| Task: Programming \| Duration: 6:40:40 \| Review: Configured Harvest destination/)
+  assert.doesNotMatch(messages[0].message.content, /Work items|Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
+  assert.equal(messages.length, 2)
+  assert.equal(messages[1].message.customType, "harvest-worklog-timesheet")
+  assert.equal(messages[1].message.content.split("\n").length <= 30, true)
+  assert.deepEqual(messages[1].options, { triggerTurn: false })
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 4)
+  assert.equal(messages.length, 2)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
