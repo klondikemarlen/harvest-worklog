@@ -428,7 +428,7 @@ export default function harvestTimeExtension(pi, options = {}) {
 
         pi.sendMessage({
           customType: "harvest-worklog-timesheet",
-          content: formatProjectTimeEntryDrafts(plan),
+          content: formatProjectTimeEntryDrafts(plan, { includeSourceEvidence: false }),
           display: true,
           attribution: "assistant",
         }, { triggerTurn: false })

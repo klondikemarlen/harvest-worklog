@@ -59,7 +59,7 @@ Use `--project PROJECT` only to restrict the draft to one exact local Project Ti
 /harvest-worklog timesheet yesterday --project wrap
 ```
 
-A configured `projectTimeMappings` destination becomes the draft's `Project` and `Task`. Evidence with no mapping, an ambiguous work item, or an unassigned work item remains visible under its local project with `Task: Review destination`; choose the Harvest project and task before submitting. Every source entry includes its ID, source kind, repository identity, interval, task-attribution provenance, and optional narrative. Nothing is submitted automatically.
+A configured `projectTimeMappings` destination becomes the draft's `Project` and `Task`. Evidence with no mapping, an ambiguous work item, or an unassigned work item remains visible under its local project with `Task: Review destination`; choose the Harvest project and task before submitting. The command summarizes each draft's destination and duration. `harvest_preview_project_time_drafts` retains source IDs, source kinds, repository identities, intervals, task-attribution provenance, and optional narratives for detailed review. Nothing is submitted automatically.
 
 Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names. Completion preserves the exact local project name.
 
