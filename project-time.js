@@ -339,7 +339,6 @@ function timesheetDestination(group, mappings) {
   }
 }
 
-
 function projectTimeEvidenceSegment(session, spentDate, segmentStartAtMs, segmentEndAtMs) {
   return {
     id: session.id,
@@ -380,8 +379,6 @@ function compareGroups(left, right) {
     String(left.activity ?? "").localeCompare(String(right.activity ?? "")) ||
     String(left.workItemAttribution ?? "").localeCompare(String(right.workItemAttribution ?? ""))
 }
-
-
 
 function localDate(date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map(value => String(value).padStart(2, "0")).join("-")

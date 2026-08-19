@@ -164,9 +164,6 @@ test("creates a multi-project draft with configured and review-required destinat
   assert.match(draft, /source entry-unmapped-project/)
 })
 
-
-
-
 test("filters, groups, maps, and limits Project Time transforms to the requested scope", () => {
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
   const nextDay = new Date(2026, 6, 18, 9).getTime()
