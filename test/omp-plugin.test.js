@@ -89,7 +89,7 @@ test("drafts local Project Time evidence without calling Harvest", async () => {
     logPath: undefined,
   }])
   assert.match(result.content[0].text, /Project: wrap\nTask: Review destination\nDestination: Local Project Time project/)
-  assert.match(result.content[0].text, /Duration: 1:30:30/)
+  assert.match(result.content[0].text, /Duration: 1:30:30\nNotes \(required before submitting\)\n- Add a factual Harvest note; automatic activity labels are reference only\.\nSource evidence/)
 })
 
 
@@ -342,8 +342,8 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Destination: Configured Harvest destination/)
-  assert.match(messages[1].message.content, /source entry-explicit; source kind human_active; repository github\.com\/klondikemarlen\/wrap; task explicit_prompt issue #91 \(klondikemarlen\/harvest-worklog\)/)
+  assert.match(messages[0].message.content, /Destination: Configured Harvest destination\nDuration: 6:40:40/)
+  assert.doesNotMatch(messages[1].message.content, /Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
   await command.handler("time-off --help", { cwd: "/tmp", ui })
   assert.equal(messages.length, 2)
   assert.deepEqual(

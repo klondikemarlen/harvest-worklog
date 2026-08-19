@@ -205,7 +205,7 @@ export function resolveProjectTimeDate(value, today = new Date()) {
   return value
 }
 
-export function formatProjectTimeEntryDrafts(plan) {
+export function formatProjectTimeEntryDrafts(plan, { includeSourceEvidence = true } = {}) {
   const drafts = new Map()
   for (const entry of plan.entries ?? []) {
     const key = JSON.stringify([entry.spentDate, entry.project, entry.task])
@@ -215,14 +215,16 @@ export function formatProjectTimeEntryDrafts(plan) {
       task: entry.task,
       destination: entry.destination,
       milliseconds: 0,
-      sources: new Map(),
+      sources: includeSourceEvidence ? new Map() : undefined,
     }
     draft.milliseconds += entry.milliseconds
-    for (const source of entry.sources ?? []) {
-      const sourceKey = source.id ?? JSON.stringify([source.spentDate, source.project, source.repositoryId, source.sourceKind, source.activity])
-      const aggregate = draft.sources.get(sourceKey) ?? { ...source, milliseconds: 0 }
-      aggregate.milliseconds += source.milliseconds
-      draft.sources.set(sourceKey, aggregate)
+    if (includeSourceEvidence) {
+      for (const source of entry.sources ?? []) {
+        const sourceKey = source.id ?? JSON.stringify([source.spentDate, source.project, source.repositoryId, source.sourceKind, source.activity])
+        const aggregate = draft.sources.get(sourceKey) ?? { ...source, milliseconds: 0 }
+        aggregate.milliseconds += source.milliseconds
+        draft.sources.set(sourceKey, aggregate)
+      }
     }
     drafts.set(key, draft)
   }
@@ -237,8 +239,10 @@ export function formatProjectTimeEntryDrafts(plan) {
       `Duration: ${formatExactDuration(draft.milliseconds)}`,
       "Notes (required before submitting)",
       "- Add a factual Harvest note; automatic activity labels are reference only.",
-      "Source evidence",
-      ...[...draft.sources.values()].sort(compareGroups).map(formatDraftEvidence),
+      ...(includeSourceEvidence ? [
+        "Source evidence",
+        ...[...draft.sources.values()].sort(compareGroups).map(formatDraftEvidence),
+      ] : []),
     ].join("\n"))
   if (sections.length === 0) sections.push("No local Project Time evidence found.")
 
