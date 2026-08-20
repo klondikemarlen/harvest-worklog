@@ -1,6 +1,6 @@
 {
   "name": "harvest-worklog",
-  "version": "0.13.17",
+  "version": "0.13.18",
   "description": "Project Time work-timesheet drafts with manual Harvest writes.",
   "type": "module",
   "license": "MIT",
