@@ -306,12 +306,14 @@ test("registers a deterministic no-write Project Time draft command", async () =
         }],
       }
     },
-    completeProjectTimeSummary: async (_ctx, plan) => {
-      assert.deepEqual(widgets.at(-1), {
-        key: "harvest-worklog-timesheet-summary",
-        content: ["Generating work summary…"],
-        options: { placement: "aboveEditor" },
-      })
+    completeProjectTimeSummary: async (ctx, plan) => {
+      if (ctx.hasUI) {
+        assert.deepEqual(widgets.at(-1), {
+          key: "harvest-worklog-timesheet-summary",
+          content: ["Generating work summary…"],
+          options: { placement: "aboveEditor" },
+        })
+      }
       if (failSummary) throw new Error("summary failed")
 
       summaryPlans.push(plan)
@@ -334,7 +336,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE \[--project PROJECT\]/)
 
   await command.handler("timesheet 2026-07-20", { cwd: "/tmp", ui })
-  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {} })
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: true })
   assert.deepEqual(transformLoads, [
     {
       from: "2026-07-20",
@@ -358,46 +360,61 @@ test("registers a deterministic no-write Project Time draft command", async () =
     "Timesheet totals (review only)\nDate: 2026-07-20\nProject: wrap\nDuration: 6:40:40\nHarvest: WRAP (YG - SIS) / Programming",
   )
   assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-0|repository-id|Narrative 0/)
-  assert.equal(messages.length, 4)
+  assert.equal(messages.length, 3)
   assert.equal(messages[1].message.customType, "harvest-worklog-timesheet-summary")
   assert.equal(messages[1].message.content, "AI-generated work summary unavailable (review before use).")
   assert.equal(messages[2].message.customType, "harvest-worklog-timesheet")
   assert.equal(messages[2].message.content.split("\n").length <= 22, true)
   assert.deepEqual(messages[2].options, { triggerTurn: false })
-  assert.equal(messages[3].message.customType, "harvest-worklog-timesheet-summary")
-  assert.equal(messages[3].message.content.split("\n").length, 5)
-  assert.match(messages[3].message.content, /Summary line 1/)
-  assert.doesNotMatch(messages[3].message.content, /Summary line 2/)
-  assert.match(messages[3].message.content, /…/)
-  assert.equal(messages[3].message.content.split("\n").every(line => line.length <= 100), true)
-  assert.match(messages[3].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
-  assert.doesNotMatch(messages[3].message.content, /Narrative 0 for WRAP-123/)
-  assert.equal(messages[2].message.content.split("\n").length + messages[3].message.content.split("\n").length <= 30, true)
-  assert.deepEqual(messages[3].options, { triggerTurn: false })
   assert.equal(summaryPlans[0].entries[0].sources.length, 40)
-  assert.deepEqual(widgets, [
-    {
-      key: "harvest-worklog-timesheet-summary",
-      content: ["Generating work summary…"],
-      options: { placement: "aboveEditor" },
-    },
-    {
-      key: "harvest-worklog-timesheet-summary",
-      content: undefined,
-      options: undefined,
-    },
-  ])
+  assert.equal(widgets.length, 2)
+  assert.deepEqual(widgets[0], {
+    key: "harvest-worklog-timesheet-summary",
+    content: ["Generating work summary…"],
+    options: { placement: "aboveEditor" },
+  })
+  assert.equal(widgets[1].key, widgets[0].key)
+  assert.deepEqual(widgets[1].options, widgets[0].options)
+  const renderedSummary = widgets[1].content.join("\n")
+  assert.equal(widgets[1].content.length, 5)
+  assert.match(renderedSummary, /Summary line 1/)
+  assert.doesNotMatch(renderedSummary, /Summary line 2/)
+  assert.match(renderedSummary, /…/)
+  assert.equal(widgets[1].content.every(line => line.length <= 100), true)
+  assert.match(renderedSummary, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
+  assert.doesNotMatch(renderedSummary, /Narrative 0 for WRAP-123/)
+  assert.equal(messages[2].message.content.split("\n").length + widgets[1].content.length <= 30, true)
+
   failSummary = true
-  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {} })
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: true })
   assert.deepEqual(transformLoads[2], transformLoads[1])
-  assert.equal(messages[5].message.content, "AI-generated work summary unavailable (review before use).")
+  assert.equal(messages.length, 4)
+  assert.deepEqual(widgets[3], {
+    key: "harvest-worklog-timesheet-summary",
+    content: ["AI-generated work summary unavailable (review before use)."],
+    options: { placement: "aboveEditor" },
+  })
   assert.deepEqual(notifications.at(-1), {
     message: "Could not generate Project Time summary; showing totals only.",
     type: "warning",
   })
+
+  failSummary = false
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: false })
+  assert.deepEqual(transformLoads[3], transformLoads[1])
   assert.equal(widgets.length, 4)
+  assert.equal(messages[5].message.customType, "harvest-worklog-timesheet-summary")
+  assert.match(messages[5].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, hasUI: true })
+  assert.deepEqual(transformLoads[4], transformLoads[1])
+  assert.equal(messages.length, 7)
+  assert.deepEqual(widgets.at(-1), {
+    key: "harvest-worklog-timesheet-summary",
+    content: ["AI-generated work summary unavailable (review before use)."],
+    options: { placement: "aboveEditor" },
+  })
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 6)
+  assert.equal(messages.length, 7)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
