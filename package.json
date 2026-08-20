@@ -52,5 +52,8 @@
   },
   "engines": {
     "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-ai": "^16.5.2"
   }
 }
