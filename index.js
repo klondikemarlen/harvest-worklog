@@ -4,6 +4,7 @@ import {
   defaultProjectTimeLogPath,
   formatProjectTimeCommandSummary,
   formatProjectTimeEntryDrafts,
+  formatProjectTimeGeneratedSummary,
   loadProjectTimeTransform,
   parseProjectTimeMappings,
   projectTimeProjectNames,
@@ -406,15 +407,38 @@ export function parseHarvestWorklogArguments(args) {
   return help ? { help: true } : { argv: words }
 }
 
+async function completeProjectTimeSummary(ctx, plan) {
+  const { complete } = await import("@oh-my-pi/pi-ai")
+  const apiKey = await ctx.modelRegistry.getApiKey(ctx.model)
+  const response = await complete(
+    ctx.model,
+    {
+      messages: [{
+        role: "user",
+        content: [{ type: "text", text: projectTimeSummaryPrompt(plan) }],
+        timestamp: Date.now(),
+      }],
+    },
+    { apiKey },
+  )
+  return response.content.filter(content => content.type === "text").map(content => content.text).join("\n")
+}
 
-function requestProjectTimeSummary(pi, ctx, plan) {
-  if (!ctx.model) return
+async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
+  let summary = ""
+  if (ctx.model) {
+    try {
+      summary = await completeSummary(ctx, plan)
+    } catch {
+      ctx.ui.notify("Could not generate Project Time summary; showing totals only.", "warning")
+    }
+  }
   pi.sendMessage({
-    customType: "harvest-worklog-timesheet-summary-request",
-    content: projectTimeSummaryPrompt(plan),
-    display: false,
+    customType: "harvest-worklog-timesheet-summary",
+    content: formatProjectTimeGeneratedSummary(summary),
+    display: true,
     attribution: "assistant",
-  }, { triggerTurn: true, deliverAs: "nextTurn" })
+  }, { triggerTurn: false })
 }
 
 export default function harvestTimeExtension(pi, options = {}) {
@@ -424,6 +448,7 @@ export default function harvestTimeExtension(pi, options = {}) {
   const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
   const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
+  const completeSummary = options.completeProjectTimeSummary ?? completeProjectTimeSummary
   pi.registerCommand("harvest-worklog", {
     description: "Build a review-only multi-project timesheet from local OMP Project Time",
     getArgumentCompletions: input => harvestWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
@@ -453,7 +478,7 @@ export default function harvestTimeExtension(pi, options = {}) {
           display: true,
           attribution: "assistant",
         }, { triggerTurn: false })
-        requestProjectTimeSummary(pi, ctx, plan)
+        await requestProjectTimeSummary(pi, ctx, plan, completeSummary)
       } catch (error) {
         ctx.ui.notify(`Could not read OMP Project Time: ${error.message}`, "error")
       }

@@ -264,6 +264,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
   const messages = []
   const notifications = []
   const transformLoads = []
+  const summaryPlans = []
   harvestTimeExtension({
     zod: { z },
     registerTool(tool) { tools.push(tool) },
@@ -287,25 +288,25 @@ test("registers a deterministic no-write Project Time draft command", async () =
           task: "Programming",
           destination: "Configured Harvest destination",
           milliseconds: 24_040_000,
-          sources: [{
-            id: "entry-explicit",
+          sources: Array.from({ length: 40 }, (_, index) => ({
+            id: `entry-${index}`,
             spentDate: "2026-07-20",
             sourceKind: "human_active",
             project: "wrap",
             repositoryId: "repository-id",
             repositoryIdentity: "github.com/klondikemarlen/wrap",
-            activity: "Fix test suite",
+            activity: `Activity ${index}`,
             workItemAttribution: "explicit_prompt",
-            workItem: { kind: "issue", number: 91, repository: "klondikemarlen/harvest-worklog" },
-            startAtMs: new Date(2026, 6, 20, 9).getTime(),
-            endAtMs: new Date(2026, 6, 20, 15, 40, 40).getTime(),
-            segmentStartAtMs: new Date(2026, 6, 20, 9).getTime(),
-            segmentEndAtMs: new Date(2026, 6, 20, 15, 40, 40).getTime(),
-            narrative: { text: "Fixed the project test suite for WRAP-123." },
-            milliseconds: 24_040_000,
-          }],
+            workItem: { kind: "issue", number: 91 + index, repository: "klondikemarlen/harvest-worklog" },
+            narrative: { text: `Narrative ${index} for WRAP-${123 + index}.` },
+            milliseconds: 601_000,
+          })),
         }],
       }
+    },
+    completeProjectTimeSummary: async (_ctx, plan) => {
+      summaryPlans.push(plan)
+      return [...Array.from({ length: 10 }, (_, index) => `Summary line ${index}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
     },
   })
 
@@ -342,17 +343,24 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: WRAP \(YG - SIS\) \| Duration: 6:40:40/)
-  assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-explicit|repository-id|Fixed the project test suite/)
-  assert.equal(messages.length, 3)
-  assert.equal(messages[1].message.customType, "harvest-worklog-timesheet")
-  assert.equal(messages[1].message.content.split("\n").length <= 22, true)
-  assert.deepEqual(messages[1].options, { triggerTurn: false })
-  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet-summary-request")
-  assert.match(messages[2].message.content, /"references":\["GitHub #91","Jira WRAP-123"\]/)
-  assert.deepEqual(messages[2].options, { triggerTurn: true, deliverAs: "nextTurn" })
+  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: wrap \| Duration: 6:40:40 \| Harvest: WRAP \(YG - SIS\) \/ Programming/)
+  assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-0|repository-id|Narrative 0/)
+  assert.equal(messages.length, 4)
+  assert.equal(messages[1].message.customType, "harvest-worklog-timesheet-summary")
+  assert.equal(messages[1].message.content, "AI-generated work summary unavailable (review before use).")
+  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet")
+  assert.equal(messages[2].message.content.split("\n").length <= 22, true)
+  assert.deepEqual(messages[2].options, { triggerTurn: false })
+  assert.equal(messages[3].message.customType, "harvest-worklog-timesheet-summary")
+  assert.equal(messages[3].message.content.split("\n").length, 7)
+  assert.match(messages[3].message.content, /Summary line 4/)
+  assert.match(messages[3].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
+  assert.doesNotMatch(messages[3].message.content, /Summary line 5/)
+  assert.equal(messages[2].message.content.split("\n").length + messages[3].message.content.split("\n").length <= 30, true)
+  assert.deepEqual(messages[3].options, { triggerTurn: false })
+  assert.equal(summaryPlans[0].entries[0].sources.length, 40)
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 3)
+  assert.equal(messages.length, 4)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
