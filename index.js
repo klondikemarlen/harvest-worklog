@@ -435,7 +435,7 @@ async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
   }
   pi.sendMessage({
     customType: "harvest-worklog-timesheet-summary",
-    content: formatProjectTimeGeneratedSummary(summary),
+    content: formatProjectTimeGeneratedSummary(summary, plan),
     display: true,
     attribution: "assistant",
   }, { triggerTurn: false })

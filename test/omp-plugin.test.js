@@ -306,7 +306,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
     },
     completeProjectTimeSummary: async (_ctx, plan) => {
       summaryPlans.push(plan)
-      return [...Array.from({ length: 10 }, (_, index) => `Summary line ${index}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
+      return ["Narrative 0 for WRAP-123.", ...Array.from({ length: 10 }, (_, index) => `Summary line ${index}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
     },
   })
 
@@ -356,6 +356,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.match(messages[3].message.content, /Summary line 4/)
   assert.match(messages[3].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
   assert.doesNotMatch(messages[3].message.content, /Summary line 5/)
+  assert.doesNotMatch(messages[3].message.content, /Narrative 0 for WRAP-123/)
   assert.equal(messages[2].message.content.split("\n").length + messages[3].message.content.split("\n").length <= 30, true)
   assert.deepEqual(messages[3].options, { triggerTurn: false })
   assert.equal(summaryPlans[0].entries[0].sources.length, 40)
