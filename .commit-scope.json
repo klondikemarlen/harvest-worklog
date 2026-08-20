@@ -1,5 +1,7 @@
 {
   "atomicGroups": [
-    ["package.json", "lib/harvest_worklog/version.rb"]
+    ["package.json", "lib/harvest_worklog/version.rb"],
+    ["package.json", "package-lock.json"],
+    ["package.json", "package-lock.json", "lib/harvest_worklog/version.rb"]
   ]
 }

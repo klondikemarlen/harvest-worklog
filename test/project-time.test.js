@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createProjectTimeTransformTool } from "../index.js"
-import { defaultProjectTimeLogPath, formatProjectTimeCommandSummary, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
+import { defaultProjectTimeLogPath, formatProjectTimeCommandSummary, formatProjectTimeEntryDrafts, loadProjectTimeTransform, parseProjectTimeMappings, projectTimeProjectNames, projectTimeSummaryPrompt, projectTimeTransform, resolveProjectTimeDate } from "../project-time.js"
 
 const schema = () => ({
   regex() { return this },
@@ -178,6 +178,48 @@ test("caps interactive timesheet summaries at thirty lines", () => {
   assert.match(output, /20 additional totals omitted; use harvest_preview_project_time_drafts for detailed review\./)
 })
 
+test("bounds high-cardinality interactive evidence to the exact project", () => {
+  const startAtMs = new Date(2026, 6, 20, 9).getTime()
+  const state = evidenceState([
+    ...Array.from({ length: 40 }, (_, index) => ({
+      id: `wrap-${index}`,
+      project: "wrap",
+      repositoryId: "wrap-repository",
+      sourceKind: "human_active",
+      activity: `Activity ${index}`,
+      workItem: { kind: "issue", number: index + 1, repository: "klondikemarlen/wrap" },
+      narrative: { text: `Narrative ${index} for WRAP-${index}.` },
+      startAtMs: startAtMs + index * 60_000,
+      endAtMs: startAtMs + (index + 1) * 60_000,
+    })),
+    {
+      id: "unrelated-source",
+      project: "other",
+      repositoryId: "other-repository",
+      sourceKind: "human_active",
+      activity: "Unrelated work",
+      narrative: { text: "This must not appear." },
+      startAtMs,
+      endAtMs: startAtMs + 60_000,
+    },
+  ])
+  const plan = projectTimeTransform(
+    state,
+    new Map(),
+    { from: "2026-07-20", to: "2026-07-20", project: "wrap", applyMappings: true },
+  )
+  const output = formatProjectTimeCommandSummary(plan)
+  const prompt = projectTimeSummaryPrompt(plan)
+  const evidence = JSON.parse(prompt.split("<evidence>\n")[1].split("\n</evidence>")[0])
+
+  assert.equal(output, "Timesheet totals (review only)\nDate: 2026-07-20 | Project: wrap | Duration: 0:40 | Harvest: Review destination")
+  assert.doesNotMatch(output, /source|Narrative|other/)
+  assert.equal(evidence.length, 8)
+  assert.equal(evidence.every(entry => entry.project === "wrap"), true)
+  assert.doesNotMatch(JSON.stringify(evidence), /other|unrelated/)
+  assert.match(prompt, /Suggested Harvest note:/)
+  assert.match(prompt, /"references":\["GitHub #1","Jira WRAP-0"\]/)
+})
 
 test("filters, groups, maps, and limits Project Time transforms to the requested scope", () => {
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()

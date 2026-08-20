@@ -1,6 +1,6 @@
 {
   "name": "harvest-worklog",
-  "version": "0.13.16",
+  "version": "0.13.17",
   "description": "Project Time work-timesheet drafts with manual Harvest writes.",
   "type": "module",
   "license": "MIT",
@@ -52,5 +52,8 @@
   },
   "engines": {
     "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-ai": "^16.5.2"
   }
 }

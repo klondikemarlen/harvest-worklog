@@ -59,7 +59,18 @@ Use `--project PROJECT` only to restrict the draft to one exact local Project Ti
 /harvest-worklog timesheet yesterday --project wrap
 ```
 
-A configured `projectTimeMappings` destination becomes the draft's `Project` and `Task`. Evidence with no mapping, an ambiguous work item, or an unassigned work item remains visible under its local project with `Task: Review destination`; choose the Harvest project and task before submitting. The command first renders compact date, local-project, and duration totals capped at 22 lines. It then asks the active OMP model for an eight-line task summary from bounded activity and narrative evidence; GitHub issue numbers and Jira ticket IDs are extracted as facts, not inferred by the model. `harvest_preview_project_time_drafts` retains source IDs, source kinds, repository identities, intervals, work-item attribution, and narratives for detailed review. Nothing is submitted automatically.
+A configured `projectTimeMappings` destination becomes the draft's Harvest `Project` and `Task`. Evidence with no mapping, an ambiguous work item, or an unassigned work item remains visible under its exact local project with `Harvest: Review destination`; choose the Harvest project and task before submitting. The command first renders compact date, local-project, duration, and Harvest-destination totals capped at 22 lines. It then asks the active OMP model for a bounded work summary and suggested Harvest note, caps that generated section before display, and keeps the combined result within 30 lines. GitHub issue numbers and Jira ticket IDs are extracted as facts, not inferred by the model. `harvest_preview_project_time_drafts` retains source IDs, source kinds, repository identities, intervals, work-item attribution, and narratives for detailed review. Nothing is submitted automatically.
+
+#### Interactive Timesheet Specification
+
+User stories:
+
+- As a worker preparing a Harvest entry, I see one screenful containing the date, exact local project, total duration, Harvest project/task or review warning, a short work summary, and a suggested note.
+- As a worker using `--project`, I see only that exact local project; unrelated projects and excluded records stay hidden.
+- As a reviewer, I see generated prose marked for review and only ticket identifiers grounded in selected evidence.
+- As an auditor, I use the explicit preview tools when I need source IDs, intervals, repository metadata, raw narratives, or attribution details.
+
+The observable contract is a deterministic block of at most 22 physical lines followed by a generated section of at most eight lines, keeping the complete result within 30 lines. The block contains only its heading plus date, exact local-project, aggregate-duration, and configured Harvest project/task or `Review destination` totals; embedded whitespace is collapsed. The generated section uses the `AI-generated work summary (review before use)` heading, three to five concise bullets derived from at most eight selected evidence records, and a clearly review-marked suggested Harvest note. The plugin bounds the generated section before display instead of relying on model compliance. The command remains review-only and never writes Harvest.
 
 Type `/harvest-worklog ` in OMP to discover `timesheet`; date aliases appear after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names. Completion preserves the exact local project name.
 
