@@ -315,7 +315,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
       if (failSummary) throw new Error("summary failed")
 
       summaryPlans.push(plan)
-      return ["Narrative 0 for WRAP-123.", ...Array.from({ length: 10 }, (_, index) => `Summary line ${index}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
+      return ["Narrative 0 for WRAP-123.", "Summary line 0", "x".repeat(200), ...Array.from({ length: 9 }, (_, index) => `Summary line ${index + 1}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
     },
   })
 
@@ -366,8 +366,10 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.deepEqual(messages[2].options, { triggerTurn: false })
   assert.equal(messages[3].message.customType, "harvest-worklog-timesheet-summary")
   assert.equal(messages[3].message.content.split("\n").length, 5)
-  assert.match(messages[3].message.content, /Summary line 2/)
-  assert.doesNotMatch(messages[3].message.content, /Summary line 3/)
+  assert.match(messages[3].message.content, /Summary line 1/)
+  assert.doesNotMatch(messages[3].message.content, /Summary line 2/)
+  assert.match(messages[3].message.content, /…/)
+  assert.equal(messages[3].message.content.split("\n").every(line => line.length <= 100), true)
   assert.match(messages[3].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
   assert.doesNotMatch(messages[3].message.content, /Narrative 0 for WRAP-123/)
   assert.equal(messages[2].message.content.split("\n").length + messages[3].message.content.split("\n").length <= 30, true)

@@ -300,7 +300,13 @@ export function formatProjectTimeGeneratedSummary(value, plan) {
     note
       ? `Suggested Harvest note (review before use): ${note}`
       : "Suggested Harvest note unavailable (review before use).",
-  ].join("\n")
+  ].map(limitProjectTimeLine).join("\n")
+}
+
+function limitProjectTimeLine(value) {
+  const limit = 100
+  const text = compactProjectTimeText(value)
+  return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`
 }
 
 function projectTimeTotals(plan) {
