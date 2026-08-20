@@ -427,10 +427,17 @@ async function completeProjectTimeSummary(ctx, plan) {
 async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
   let summary = ""
   if (ctx.model) {
+    ctx.ui.setWidget?.(
+      "harvest-worklog-timesheet-summary",
+      ["Generating work summary…"],
+      { placement: "aboveEditor" },
+    )
     try {
       summary = await completeSummary(ctx, plan)
     } catch {
       ctx.ui.notify("Could not generate Project Time summary; showing totals only.", "warning")
+    } finally {
+      ctx.ui.setWidget?.("harvest-worklog-timesheet-summary", undefined)
     }
   }
   pi.sendMessage({

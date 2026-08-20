@@ -173,9 +173,10 @@ test("caps interactive timesheet summaries at thirty lines", () => {
     })),
   })
 
-  assert.equal(output.split("\n").length, 22)
-  assert.match(output, /Date: 2026-07-20 \| Project: wrap 0 hidden \| Duration: 0:01/)
-  assert.match(output, /20 additional totals omitted; use harvest_preview_project_time_drafts for detailed review\./)
+  assert.equal(output.split("\n").length <= 22, true)
+  assert.match(output, /Date: 2026-07-20\nProject: wrap 0 hidden\nDuration: 0:01\nHarvest: Review destination/)
+  assert.match(output, /36 additional totals omitted; use harvest_preview_project_time_drafts for detailed review\./)
+  assert.doesNotMatch(output, /\|/)
 })
 
 test("bounds high-cardinality interactive evidence to the exact project", () => {
@@ -185,10 +186,15 @@ test("bounds high-cardinality interactive evidence to the exact project", () => 
       id: `wrap-${index}`,
       project: "wrap",
       repositoryId: "wrap-repository",
+      repositoryIdentity: "github.com/icefoganalytics/wrap",
       sourceKind: "human_active",
-      activity: `Activity ${index}`,
-      workItem: { kind: "issue", number: index + 1, repository: "klondikemarlen/wrap" },
-      narrative: { text: `Narrative ${index} for WRAP-${index}.` },
+      activity: `Workflow search optimization ${index}`,
+      workItem: {
+        kind: "pull_request",
+        number: index < 30 ? 584 : 583,
+        repository: "github.com/icefoganalytics/wrap",
+      },
+      narrative: { text: `QA and fixup for workflow search optimization WRAP-${index}.` },
       startAtMs: startAtMs + index * 60_000,
       endAtMs: startAtMs + (index + 1) * 60_000,
     })),
@@ -212,13 +218,19 @@ test("bounds high-cardinality interactive evidence to the exact project", () => 
   const prompt = projectTimeSummaryPrompt(plan)
   const evidence = JSON.parse(prompt.split("<evidence>\n")[1].split("\n</evidence>")[0])
 
-  assert.equal(output, "Timesheet totals (review only)\nDate: 2026-07-20 | Project: wrap | Duration: 0:40 | Harvest: Review destination")
-  assert.doesNotMatch(output, /source|Narrative|other/)
+  assert.equal(
+    output,
+    "Timesheet totals (review only)\nDate: 2026-07-20\nProject: wrap\nDuration: 0:40\nHarvest: Review destination",
+  )
+  assert.doesNotMatch(output, /source|Narrative|other|\|/)
   assert.equal(evidence.length, 8)
   assert.equal(evidence.every(entry => entry.project === "wrap"), true)
+  assert.equal(evidence.every(entry => entry.repository === "github.com/icefoganalytics/wrap"), true)
+  assert.equal(evidence.every(entry => entry.workItem.number === 584), true)
+  assert.equal(evidence.every(entry => entry.workstreamDuration === "0:30"), true)
   assert.doesNotMatch(JSON.stringify(evidence), /other|unrelated/)
-  assert.match(prompt, /Suggested Harvest note:/)
-  assert.match(prompt, /"references":\["GitHub #1","Jira WRAP-0"\]/)
+  assert.match(prompt, /lead with the workstream having the greatest cumulative duration/)
+  assert.match(prompt, /"references":\["GitHub PR #584","Jira WRAP-0"\]/)
 })
 
 test("filters, groups, maps, and limits Project Time transforms to the requested scope", () => {

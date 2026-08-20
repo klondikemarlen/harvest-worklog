@@ -262,9 +262,11 @@ test("registers a deterministic no-write Project Time draft command", async () =
   const tools = []
   const commands = []
   const messages = []
+  const widgets = []
   const notifications = []
   const transformLoads = []
   const summaryPlans = []
+  let failSummary = false
   harvestTimeExtension({
     zod: { z },
     registerTool(tool) { tools.push(tool) },
@@ -305,13 +307,21 @@ test("registers a deterministic no-write Project Time draft command", async () =
       }
     },
     completeProjectTimeSummary: async (_ctx, plan) => {
+      assert.deepEqual(widgets.at(-1), {
+        key: "harvest-worklog-timesheet-summary",
+        content: ["Generating work summary…"],
+        options: { placement: "aboveEditor" },
+      })
+      if (failSummary) throw new Error("summary failed")
+
       summaryPlans.push(plan)
-      return ["Narrative 0 for WRAP-123.", ...Array.from({ length: 10 }, (_, index) => `Summary line ${index}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
+      return ["Narrative 0 for WRAP-123.", "Summary line 0", "x".repeat(200), ...Array.from({ length: 9 }, (_, index) => `Summary line ${index + 1}`), "Suggested Harvest note: Ready for Harvest."].join("\n")
     },
   })
 
   const ui = {
     notify(message, type) { notifications.push({ message, type }) },
+    setWidget(key, content, options) { widgets.push({ key, content, options }) },
   }
   const command = commands[0].command
 
@@ -343,7 +353,10 @@ test("registers a deterministic no-write Project Time draft command", async () =
       logPath: "/tmp/project-time.json",
     },
   ])
-  assert.match(messages[0].message.content, /Date: 2026-07-20 \| Project: wrap \| Duration: 6:40:40 \| Harvest: WRAP \(YG - SIS\) \/ Programming/)
+  assert.equal(
+    messages[0].message.content,
+    "Timesheet totals (review only)\nDate: 2026-07-20\nProject: wrap\nDuration: 6:40:40\nHarvest: WRAP (YG - SIS) / Programming",
+  )
   assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-0|repository-id|Narrative 0/)
   assert.equal(messages.length, 4)
   assert.equal(messages[1].message.customType, "harvest-worklog-timesheet-summary")
@@ -352,16 +365,39 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.equal(messages[2].message.content.split("\n").length <= 22, true)
   assert.deepEqual(messages[2].options, { triggerTurn: false })
   assert.equal(messages[3].message.customType, "harvest-worklog-timesheet-summary")
-  assert.equal(messages[3].message.content.split("\n").length, 7)
-  assert.match(messages[3].message.content, /Summary line 4/)
+  assert.equal(messages[3].message.content.split("\n").length, 5)
+  assert.match(messages[3].message.content, /Summary line 1/)
+  assert.doesNotMatch(messages[3].message.content, /Summary line 2/)
+  assert.match(messages[3].message.content, /…/)
+  assert.equal(messages[3].message.content.split("\n").every(line => line.length <= 100), true)
   assert.match(messages[3].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
-  assert.doesNotMatch(messages[3].message.content, /Summary line 5/)
   assert.doesNotMatch(messages[3].message.content, /Narrative 0 for WRAP-123/)
   assert.equal(messages[2].message.content.split("\n").length + messages[3].message.content.split("\n").length <= 30, true)
   assert.deepEqual(messages[3].options, { triggerTurn: false })
   assert.equal(summaryPlans[0].entries[0].sources.length, 40)
+  assert.deepEqual(widgets, [
+    {
+      key: "harvest-worklog-timesheet-summary",
+      content: ["Generating work summary…"],
+      options: { placement: "aboveEditor" },
+    },
+    {
+      key: "harvest-worklog-timesheet-summary",
+      content: undefined,
+      options: undefined,
+    },
+  ])
+  failSummary = true
+  await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {} })
+  assert.deepEqual(transformLoads[2], transformLoads[1])
+  assert.equal(messages[5].message.content, "AI-generated work summary unavailable (review before use).")
+  assert.deepEqual(notifications.at(-1), {
+    message: "Could not generate Project Time summary; showing totals only.",
+    type: "warning",
+  })
+  assert.equal(widgets.length, 4)
   await command.handler("time-off --help", { cwd: "/tmp", ui })
-  assert.equal(messages.length, 4)
+  assert.equal(messages.length, 6)
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
