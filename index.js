@@ -425,24 +425,29 @@ async function completeProjectTimeSummary(ctx, plan) {
 }
 
 async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
+  const widgetKey = "harvest-worklog-timesheet-summary"
+  const replaceInWidget = ctx.hasUI && typeof ctx.ui.setWidget === "function"
   let summary = ""
   if (ctx.model) {
-    ctx.ui.setWidget?.(
-      "harvest-worklog-timesheet-summary",
-      ["Generating work summary…"],
-      { placement: "aboveEditor" },
-    )
+    if (replaceInWidget) {
+      ctx.ui.setWidget(widgetKey, ["Generating work summary…"], { placement: "aboveEditor" })
+    }
     try {
       summary = await completeSummary(ctx, plan)
     } catch {
       ctx.ui.notify("Could not generate Project Time summary; showing totals only.", "warning")
-    } finally {
-      ctx.ui.setWidget?.("harvest-worklog-timesheet-summary", undefined)
     }
   }
+
+  const content = formatProjectTimeGeneratedSummary(summary, plan)
+  if (replaceInWidget) {
+    ctx.ui.setWidget(widgetKey, content.split("\n"), { placement: "aboveEditor" })
+    return
+  }
+
   pi.sendMessage({
-    customType: "harvest-worklog-timesheet-summary",
-    content: formatProjectTimeGeneratedSummary(summary, plan),
+    customType: widgetKey,
+    content,
     display: true,
     attribution: "assistant",
   }, { triggerTurn: false })
