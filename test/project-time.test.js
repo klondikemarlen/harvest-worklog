@@ -21,46 +21,63 @@ const z = {
 
 const evidenceState = entries => ({ format: "omp-project-time/evidence", version: 1, entries })
 
-test("normalizes and validates Project Time mapping settings", () => {
-  assert.deepEqual([...parseProjectTimeMappings(" ")], [])
-  assert.deepEqual(
-    [...parseProjectTimeMappings({ " Harvest API ": { project: " Internal ", task: " Development " } })],
-    [["Harvest API", { project: "Internal", task: "Development" }]],
-  )
-  assert.throws(
-    () => parseProjectTimeMappings({ "Harvest API": { project: " ", task: "Development" } }),
-    /requires project and task names/,
-  )
-  assert.throws(
-    () => parseProjectTimeMappings({
-      "Harvest API": { project: "Internal", task: "Development" },
-      " Harvest API ": { project: "Other", task: "Development" },
-    }),
-    /duplicate project Harvest API/,
-  )
+test("when mapping settings are valid or invalid, it normalizes and validates them", () => {
+  // Arrange
+  const validMapping = { " Harvest API ": { project: " Internal ", task: " Development " } }
+  const missingProject = { "Harvest API": { project: " ", task: "Development" } }
+  const duplicateProject = {
+    "Harvest API": { project: "Internal", task: "Development" },
+    " Harvest API ": { project: "Other", task: "Development" },
+  }
+
+  // Act
+  const emptyMappings = [...parseProjectTimeMappings(" ")]
+  const normalizedMappings = [...parseProjectTimeMappings(validMapping)]
+  const parseMissingProject = () => parseProjectTimeMappings(missingProject)
+  const parseDuplicateProject = () => parseProjectTimeMappings(duplicateProject)
+
+  // Assert
+  assert.deepEqual(emptyMappings, [])
+  assert.deepEqual(normalizedMappings, [["Harvest API", { project: "Internal", task: "Development" }]])
+  assert.throws(parseMissingProject, /requires project and task names/)
+  assert.throws(parseDuplicateProject, /duplicate project Harvest API/)
 })
 
-test("resolves a local Project Time date", () => {
-  assert.equal(resolveProjectTimeDate("today", new Date(2026, 6, 20, 12)), "2026-07-20")
-  assert.equal(resolveProjectTimeDate("yesterday", new Date(2026, 6, 20, 12)), "2026-07-19")
-  assert.throws(() => resolveProjectTimeDate("2026-02-31"), /valid local date/)
+test("when resolving a local date, it resolves relative dates and rejects invalid input", () => {
+  // Arrange
+  const currentDate = new Date(2026, 6, 20, 12)
+
+  // Act
+  const today = resolveProjectTimeDate("today", currentDate)
+  const yesterday = resolveProjectTimeDate("yesterday", currentDate)
+  const parseInvalidDate = () => resolveProjectTimeDate("2026-02-31")
+
+  // Assert
+  assert.equal(today, "2026-07-20")
+  assert.equal(yesterday, "2026-07-19")
+  assert.throws(parseInvalidDate, /valid local date/)
 })
 
 
-test("lists unique human-active local Project Time names", () => {
-  assert.deepEqual(
-    projectTimeProjectNames(evidenceState([
-      { sourceKind: "human_active", project: "wrap" },
-      { sourceKind: "agent_turn_elapsed", project: "ignored" },
-      { sourceKind: "human_active", project: "Ice Fog Analytics" },
-      { sourceKind: "human_active", project: "wrap" },
-      { sourceKind: "human_active", project: " " },
-    ])),
-    ["Ice Fog Analytics", "wrap"],
-  )
+test("when evidence has human-active projects, it returns distinct project names", () => {
+  // Arrange
+  const state = evidenceState([
+    { sourceKind: "human_active", project: "wrap" },
+    { sourceKind: "agent_turn_elapsed", project: "ignored" },
+    { sourceKind: "human_active", project: "Ice Fog Analytics" },
+    { sourceKind: "human_active", project: "wrap" },
+    { sourceKind: "human_active", project: " " },
+  ])
+
+  // Act
+  const projects = projectTimeProjectNames(state)
+
+  // Assert
+  assert.deepEqual(projects, ["Ice Fog Analytics", "wrap"])
 })
 
-test("loads current Project Time SQLite evidence", async () => {
+test("when reading current SQLite evidence, it loads the expected Project Time plan", async () => {
+  // Arrange
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
   const entry = {
     id: "entry-1",
@@ -72,6 +89,7 @@ test("loads current Project Time SQLite evidence", async () => {
     endAtMs: startAtMs + 3_600_000,
   }
   let closed = false
+  // Act
   const plan = await loadProjectTimeTransform({
     from: "2026-07-17",
     to: "2026-07-17",
@@ -97,6 +115,7 @@ test("loads current Project Time SQLite evidence", async () => {
     read: async () => JSON.stringify(evidenceState([entry])),
   })
 
+  // Assert
   assert.match(defaultProjectTimeLogPath(), /time-log\.sqlite$/)
   assert.equal(plan.groups[0].hours, 1)
   assert.equal(legacyPlan.groups[0].hours, 1)
@@ -109,8 +128,10 @@ test("loads current Project Time SQLite evidence", async () => {
 
 
 
-test("creates a multi-project draft with configured and review-required destinations", () => {
+test("when destinations are configured or require review, it creates a multi-project draft", () => {
+  // Arrange
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
+  // Act
   const plan = projectTimeTransform(
     evidenceState([
       {
@@ -147,6 +168,7 @@ test("creates a multi-project draft with configured and review-required destinat
     { from: "2026-07-17", to: "2026-07-17", applyMappings: true },
   )
 
+  // Assert
   assert.deepEqual(
     plan.entries.map(({ project, task, destination, hours }) => ({ project, task, destination, hours })),
     [
@@ -164,7 +186,9 @@ test("creates a multi-project draft with configured and review-required destinat
   assert.match(draft, /source entry-unmapped-project/)
 })
 
-test("caps interactive timesheet summaries at thirty lines", () => {
+test("when more than twenty-one totals exist, it limits the interactive summary", () => {
+  // Arrange
+  // Act
   const output = formatProjectTimeCommandSummary({
     groups: Array.from({ length: 40 }, (_, index) => ({
       spentDate: "2026-07-20",
@@ -173,13 +197,15 @@ test("caps interactive timesheet summaries at thirty lines", () => {
     })),
   })
 
+  // Assert
   assert.equal(output.split("\n").length <= 22, true)
   assert.match(output, /Date: 2026-07-20\nProject: wrap 0 hidden\nDuration: 0:01\nHarvest: Review destination/)
   assert.match(output, /36 additional totals omitted; use omp_worklog_preview_project_time_drafts for detailed review\./)
   assert.doesNotMatch(output, /\|/)
 })
 
-test("bounds high-cardinality interactive evidence to the exact project", () => {
+test("when a project is selected from high-cardinality evidence, it excludes unrelated evidence", () => {
+  // Arrange
   const startAtMs = new Date(2026, 6, 20, 9).getTime()
   const state = evidenceState([
     ...Array.from({ length: 40 }, (_, index) => ({
@@ -209,6 +235,7 @@ test("bounds high-cardinality interactive evidence to the exact project", () => 
       endAtMs: startAtMs + 60_000,
     },
   ])
+  // Act
   const plan = projectTimeTransform(
     state,
     new Map(),
@@ -218,6 +245,7 @@ test("bounds high-cardinality interactive evidence to the exact project", () => 
   const prompt = projectTimeSummaryPrompt(plan)
   const evidence = JSON.parse(prompt.split("<evidence>\n")[1].split("\n</evidence>")[0])
 
+  // Assert
   assert.equal(
     output,
     "Timesheet totals (review only)\nDate: 2026-07-20\nProject: wrap\nDuration: 0:40\nHarvest: Review destination",
@@ -233,7 +261,8 @@ test("bounds high-cardinality interactive evidence to the exact project", () => 
   assert.match(prompt, /"references":\["GitHub PR #584","Jira WRAP-0"\]/)
 })
 
-test("filters, groups, maps, and limits Project Time transforms to the requested scope", () => {
+test("when filtering Project Time evidence, it groups, maps, and limits the requested scope", () => {
+  // Arrange
   const at = (hour, minute = 0) => new Date(2026, 6, 17, hour, minute).getTime()
   const nextDay = new Date(2026, 6, 18, 9).getTime()
   const mappings = parseProjectTimeMappings(JSON.stringify({
@@ -256,8 +285,10 @@ test("filters, groups, maps, and limits Project Time transforms to the requested
     applyMappings: true,
   }
 
+  // Act
   const plan = projectTimeTransform(state, mappings, options)
 
+  // Assert
   assert.deepEqual(
     plan.groups.map(({ spentDate, activity, hours, harvest }) => ({ spentDate, activity, hours, harvest })),
     [
@@ -280,10 +311,12 @@ test("filters, groups, maps, and limits Project Time transforms to the requested
   assert.equal(JSON.stringify(plan), JSON.stringify(projectTimeTransform(state, mappings, options)))
 })
 
-test("defaults transforms to human-active intervals", () => {
+test("when no source kind is supplied, it defaults transforms to human-active intervals", () => {
+  // Arrange
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
   const mappings = parseProjectTimeMappings({ "Harvest API": { project: "Internal", task: "Development" } })
   const state = evidenceState([{ project: "Harvest API", repositoryId: "repo", sourceKind: "agent_turn_elapsed", activity: "implementation", startAtMs, endAtMs: startAtMs + 3_600_000 }])
+  // Act
   const defaultPlan = projectTimeTransform(
     state,
     mappings,
@@ -295,6 +328,7 @@ test("defaults transforms to human-active intervals", () => {
     { from: "2026-07-17", to: "2026-07-17", sourceKind: "agent_turn_elapsed", applyMappings: true },
   )
 
+  // Assert
   assert.equal(defaultPlan.sourceKind, "human_active")
   assert.equal(explicitPlan.sourceKind, "agent_turn_elapsed")
   assert.deepEqual(defaultPlan.groups, [])
@@ -303,7 +337,8 @@ test("defaults transforms to human-active intervals", () => {
   assert.deepEqual(explicitPlan.entries.map(({ hours }) => hours), [1])
 })
 
-test("previews JSON transforms without writing activity entries", async () => {
+test("when previewing JSON transforms, it returns data without writing activity entries", async () => {
+  // Arrange
   const plan = {
     groups: [],
     entries: [
@@ -321,6 +356,7 @@ test("previews JSON transforms without writing activity entries", async () => {
     },
   })
 
+  // Act
   const previewResult = await preview.execute("preview", {
     from: "2026-07-17",
     to: "2026-07-17",
@@ -329,13 +365,16 @@ test("previews JSON transforms without writing activity entries", async () => {
     applyMappings: true,
   })
 
+  // Assert
   assert.equal(preview.approval, "read")
   assert.deepEqual(JSON.parse(previewResult.content[0].text), plan)
   assert.equal(previewCalls[0].applyMappings, true)
 })
 
-test("does not propose activity groups that round to zero Harvest hours", () => {
+test("when an activity duration rounds to zero, it does not create a destination entry", () => {
+  // Arrange
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
+  // Act
   const plan = projectTimeTransform(
     evidenceState([{
       project: "Harvest API",
@@ -349,6 +388,7 @@ test("does not propose activity groups that round to zero Harvest hours", () => 
     { from: "2026-07-17", to: "2026-07-17", applyMappings: true },
   )
 
+  // Assert
   assert.equal(plan.groups[0].hours, 0)
   assert.deepEqual(plan.entries, [])
 })
