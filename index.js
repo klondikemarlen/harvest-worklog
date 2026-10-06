@@ -221,9 +221,11 @@ export function createTimeOffTool(z, { command = "omp-worklog", defaultHours = 7
   }
 }
 
+const WORKLOG_COMMAND = "worklog"
+
 const OMP_WORKLOG_USAGE = [
   "Usage:",
-  "  /omp-worklog timesheet DATE [--project PROJECT]",
+  `  /${WORKLOG_COMMAND} timesheet DATE [--project PROJECT]`,
   "",
   "DATE: today, yesterday, or YYYY-MM-DD",
 ].join("\n")
@@ -461,7 +463,7 @@ export default function ompWorklogExtension(pi, options = {}) {
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
   const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
   const completeSummary = options.completeProjectTimeSummary ?? completeProjectTimeSummary
-  pi.registerCommand("omp-worklog", {
+  pi.registerCommand(WORKLOG_COMMAND, {
     description: "Build a review-only multi-project timesheet from local OMP Project Time",
     getArgumentCompletions: input => ompWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
     handler: async (args, ctx) => {

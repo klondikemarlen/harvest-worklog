@@ -365,13 +365,13 @@ test("when registering the OMP extension, it exposes a deterministic no-write dr
   const command = commands[0].command
 
   // Assert
-  assert.equal(commands[0].name, "omp-worklog")
+  assert.equal(commands[0].name, "worklog")
   assert.deepEqual(
     command.getArgumentCompletions("timesheet today --project w").map(item => item.value),
     ["timesheet today --project wrap"],
   )
   await command.handler("", { cwd: "/tmp", ui })
-  assert.match(notifications[0].message, /\/omp-worklog timesheet DATE \[--project PROJECT\]/)
+  assert.match(notifications[0].message, /\/worklog timesheet DATE \[--project PROJECT\]/)
 
   await command.handler("timesheet 2026-07-20", { cwd: "/tmp", ui })
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: true })
