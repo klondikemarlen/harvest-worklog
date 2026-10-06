@@ -70,3 +70,38 @@ fi
     rmSync(home, { force: true, recursive: true })
   }
 })
+
+test("when no worklog plugin is installed, it installs OMP Worklog", () => {
+  // Arrange
+  const home = mkdtempSync(join(tmpdir(), "omp-worklog-release-"))
+  const bin = join(home, "bin")
+  const calls = join(home, "calls")
+  const omp = join(bin, "omp")
+  mkdirSync(bin)
+  writeFileSync(omp, `#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$OMP_CALLS"
+if [ "$1 $2" = "plugin list" ]; then
+  printf '%s\n' '{"npm":[]}'
+fi
+`)
+  chmodSync(omp, 0o755)
+
+  try {
+    // Act
+    const result = spawnSync("bash", ["bin/release-plugin"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, OMP_CALLS: calls, PATH: `${bin}:${process.env.PATH}` },
+    })
+
+    // Assert
+    assert.equal(result.status, 0)
+    assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), [
+      "plugin list --json",
+      "plugin list --json",
+      "plugin install --force github:klondikemarlen/omp-worklog",
+    ])
+  } finally {
+    rmSync(home, { force: true, recursive: true })
+  }
+})
