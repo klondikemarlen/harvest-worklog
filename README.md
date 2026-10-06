@@ -2,6 +2,10 @@
 
 Harvest Worklog is a Project Time-driven Ruby CLI and OMP plugin that builds reviewable personal work timesheets from local evidence. Harvest remains a manual destination: the only Harvest operations are explicitly requested time-off and ordinary-work writes.
 
+## Documentation
+
+The repository-local [knowledge base](docs/README.md) defines the product direction, domain, architecture, decisions, and QA boundaries. It distinguishes the provider-neutral work-log direction from the current Harvest-specific adapters.
+
 ## Credentials
 
 1. Open [Harvest ID Developers](https://id.getharvest.com/developers) and create a Personal Access Token for this local tool.
