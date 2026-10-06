@@ -16,7 +16,7 @@ Harvest credentials are not required to read local evidence or generate drafts. 
 
 ## Product Direction
 
-The core product is a time-log and workflow tracker, not a Harvest client. Its standard output should be a provider-neutral, line-oriented time log in the familiar GTimeLog shape:
+The core product is a time-log and workflow tracker, not a Harvest client. Its standard output should be a concise, provider-neutral, line-oriented time log:
 
 ```text
 Project: task: duration
