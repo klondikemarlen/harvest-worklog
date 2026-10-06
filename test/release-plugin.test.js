@@ -5,28 +5,31 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-test("rejects an installed plugin from a mismatched Git revision", () => {
-  const home = mkdtempSync(join(tmpdir(), "harvest-worklog-release-"))
+test("when the installed revision differs, rejects the plugin", () => {
+  // Arrange
+  const home = mkdtempSync(join(tmpdir(), "omp-worklog-release-"))
   const pluginRoot = join(home, ".omp", "plugins")
-  const packagePath = join(pluginRoot, "node_modules", "harvest-worklog", "package.json")
+  const packagePath = join(pluginRoot, "node_modules", "omp-worklog", "package.json")
   const version = execFileSync("node", ["-p", "require('./package.json').version"], { encoding: "utf8" }).trim()
-  mkdirSync(join(pluginRoot, "node_modules", "harvest-worklog"), { recursive: true })
-  writeFileSync(packagePath, JSON.stringify({ name: "harvest-worklog", version }))
+  mkdirSync(join(pluginRoot, "node_modules", "omp-worklog"), { recursive: true })
+  writeFileSync(packagePath, JSON.stringify({ name: "omp-worklog", version }))
   writeFileSync(join(pluginRoot, "bun.lock"), JSON.stringify({
     packages: {
-      "harvest-worklog": ["harvest-worklog@github:klondikemarlen/harvest-worklog#0000000"],
+      "omp-worklog": ["omp-worklog@github:klondikemarlen/omp-worklog#0000000"],
     },
   }))
 
   try {
+    // Act
     const result = spawnSync("bash", ["bin/verify-plugin-release"], {
       cwd: process.cwd(),
       encoding: "utf8",
       env: { ...process.env, HOME: home },
     })
+    // Assert
     assert.equal(result.status, 1)
-    assert.match(result.stderr, new RegExp(`Expected installed harvest-worklog@${version} from Git revision`))
-    assert.match(result.stderr, new RegExp(`found harvest-worklog@${version} at ${packagePath} resolved from Git revision 0000000`))
+    assert.match(result.stderr, new RegExp(`Expected installed omp-worklog@${version} from Git revision`))
+    assert.match(result.stderr, new RegExp(`found omp-worklog@${version} at ${packagePath} resolved from Git revision 0000000`))
   } finally {
     rmSync(home, { force: true, recursive: true })
   }
