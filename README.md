@@ -109,7 +109,9 @@ OMP Worklog reads Project Time's persisted `omp-project-time/evidence` v1 entrie
 
 ## Migration from Harvest Worklog
 
-Version `0.14.0` is a clean identity cutover. Uninstall the retired `harvest-worklog` gem and OMP plugin, then install `omp-worklog`; replace former `harvest-worklog` CLI and `/harvest-worklog` command invocations with `omp-worklog` and `/worklog`. The retired package, executable, command, tools, module, and settings aliases are not retained.
+Version `0.14.0` is a clean identity cutover. Uninstall the retired `harvest-worklog` gem and OMP plugin, then install `omp-worklog`; replace former `harvest-worklog` CLI and `/harvest-worklog` command invocations with `omp-worklog` and `/omp-worklog`. The retired package, executable, command, tools, module, and settings aliases are not retained.
+
+Version `0.14.3` renames the OMP slash command from `/omp-worklog` to `/worklog`; the `omp-worklog` package identity and CLI executable are unchanged.
 
 ## Release
 
