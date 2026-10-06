@@ -4,7 +4,7 @@
 
 **Status:** Accepted
 
-Harvest Worklog reads persisted OMP Project Time evidence rather than measuring activity itself. This keeps collection and analytical ownership in the upstream project and lets this repository focus on transformation, review, and optional destination adapters.
+OMP Worklog reads persisted OMP Project Time evidence rather than measuring activity itself. This keeps collection and analytical ownership in the upstream project and lets this repository focus on transformation, review, and optional destination adapters.
 
 ## D-002: Draft Before External Write
 
@@ -20,9 +20,9 @@ When no configured Harvest destination applies—or attribution is ambiguous or 
 
 ## D-004: Harvest Is a Current Adapter, Not the Canonical Model
 
-**Status:** Direction accepted; implementation deferred
+**Status:** Accepted; identity cutover implemented
 
-The durable product target is a provider-neutral work log expressed as `project: task: duration`, built from OMP Project Time analytics. Harvest project/task mappings are projections from that record to one current destination. This issue records the direction only; it does not rename or migrate the published Harvest Worklog interfaces.
+The durable product target is a provider-neutral work log expressed as `project: task: duration`, built from OMP Project Time analytics. Harvest project/task mappings are projections from that record to one current destination. Version `0.14.0` performs the identity cutover without retaining the retired Harvest Worklog interfaces.
 
 ## D-005: Keep Detailed Implementation Knowledge Local
 
