@@ -246,7 +246,7 @@ export function formatProjectTimeCommandSummary(plan) {
   }
 
   const omitted = totals.length - visible
-  if (omitted > 0) lines.push(`${omitted} additional total${omitted === 1 ? "" : "s"} omitted; use harvest_preview_project_time_drafts for detailed review.`)
+  if (omitted > 0) lines.push(`${omitted} additional total${omitted === 1 ? "" : "s"} omitted; use omp_worklog_preview_project_time_drafts for detailed review.`)
   if (totals.length === 0) lines.push("No local Project Time evidence found.")
 
   return lines.join("\n")

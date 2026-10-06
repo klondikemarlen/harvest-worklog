@@ -64,8 +64,8 @@ test("loads current Project Time SQLite evidence", async () => {
   const startAtMs = new Date(2026, 6, 17, 9).getTime()
   const entry = {
     id: "entry-1",
-    project: "Harvest Worklog",
-    repositoryId: "github.com/klondikemarlen/harvest-worklog",
+    project: "OMP Worklog",
+    repositoryId: "github.com/klondikemarlen/omp-worklog",
     sourceKind: "human_active",
     activity: "implementation",
     startAtMs,
@@ -175,7 +175,7 @@ test("caps interactive timesheet summaries at thirty lines", () => {
 
   assert.equal(output.split("\n").length <= 22, true)
   assert.match(output, /Date: 2026-07-20\nProject: wrap 0 hidden\nDuration: 0:01\nHarvest: Review destination/)
-  assert.match(output, /36 additional totals omitted; use harvest_preview_project_time_drafts for detailed review\./)
+  assert.match(output, /36 additional totals omitted; use omp_worklog_preview_project_time_drafts for detailed review\./)
   assert.doesNotMatch(output, /\|/)
 })
 
