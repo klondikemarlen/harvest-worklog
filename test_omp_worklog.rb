@@ -21,6 +21,15 @@ class OmpWorklogTest < Minitest::Test
     refute_includes output.string, "reconcile"
   end
 
+  def test_global_version_prints_the_installed_release_version
+    output = StringIO.new
+    error = StringIO.new
+
+    assert_equal 0, OmpWorklog::CLI.run(["--version"], output:, error:)
+    assert_equal "#{OmpWorklog::VERSION}\n", output.string
+    assert_equal "", error.string
+  end
+
   def test_dates_between_skips_weekends_by_default
     from = Date.new(2026, 7, 17)
     to = Date.new(2026, 7, 20)

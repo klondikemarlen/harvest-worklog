@@ -38,6 +38,9 @@ module OmpWorklog
       when "-h", "--help"
         output.puts usage
         0
+      when "--version"
+        output.puts VERSION
+        0
       else
         error.puts "Error: choose time-off or work-entry"
         error.puts usage

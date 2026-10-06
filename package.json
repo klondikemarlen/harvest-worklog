@@ -1,6 +1,6 @@
 {
   "name": "omp-worklog",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "OMP Project Time work logs with an optional manual Harvest destination.",
   "type": "module",
   "license": "MIT",
