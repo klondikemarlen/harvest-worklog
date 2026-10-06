@@ -22,7 +22,7 @@ The Ruby CLI owns the current Harvest write adapters. `time-off` and `work-entry
 | --- | --- | --- |
 | `project-time.js` | Evidence loading, filtering, grouping, mapping projection, drafts, and timesheet formatting | Source comments and `test/project-time.test.js` |
 | `index.js` | OMP command, completion, tool registration, interactive summary lifecycle, and CLI invocation | Source comments and `test/omp-plugin.test.js` |
-| `lib/harvest_worklog.rb` and `lib/harvest_worklog/work_entry_cli.rb` | Harvest CLI validation and writes | Source comments and `test_harvest_worklog.rb` |
+| `lib/omp_worklog.rb` and `lib/omp_worklog/work_entry_cli.rb` | Harvest CLI validation and writes | Source comments and `test_omp_worklog.rb` |
 | `package.json` and gemspec | Published package metadata and included artifacts | Manifest files |
 
 ## Design Constraint

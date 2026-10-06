@@ -4,7 +4,7 @@
 
 | Term | Meaning | Authority |
 | --- | --- | --- |
-| Project Time evidence | Persisted local interval records produced by OMP Project Time. Harvest Worklog reads this data but does not define its format. | OMP Project Time |
+| Project Time evidence | Persisted local interval records produced by OMP Project Time. OMP Worklog reads this data but does not define its format. | OMP Project Time |
 | Human-active evidence | Evidence whose `sourceKind` is `human_active`; this is the default input to work-log drafts. | OMP Project Time and this repository's transform boundary |
 | Local project | The exact Project Time project name recorded with evidence. It identifies the source-side work stream. | Evidence record |
 | Activity | A label attached to an evidence segment. It helps group and explain work but is not an approved external task. | Evidence record |

@@ -1,22 +1,22 @@
 # frozen_string_literal: true
 
-require_relative "lib/harvest_worklog/version"
+require_relative "lib/omp_worklog/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "harvest-worklog"
-  spec.version = HarvestWorklog::VERSION
+  spec.name = "omp-worklog"
+  spec.version = OmpWorklog::VERSION
   spec.authors = ["Marlen Brunner"]
   spec.email = ["klondikemarlen@gmail.com"]
-  spec.summary = "Project Time work-timesheet drafts with manual Harvest writes."
-  spec.homepage = "https://github.com/klondikemarlen/harvest-worklog"
+  spec.summary = "OMP Project Time work logs with an optional manual Harvest destination."
+  spec.homepage = "https://github.com/klondikemarlen/omp-worklog"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
 
   spec.metadata["source_code_uri"] = spec.homepage
 
-  spec.files = Dir["lib/**/*.rb", "bin/*", "harvest-worklog.rb", "README.md"]
+  spec.files = Dir["lib/**/*.rb", "bin/*", "omp-worklog.rb", "README.md"]
   spec.bindir = "bin"
-  spec.executables = ["harvest-worklog"]
+  spec.executables = ["omp-worklog"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "marlens-harvest-api-v2", "~> 0.2"

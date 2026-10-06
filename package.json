@@ -1,7 +1,7 @@
 {
-  "name": "harvest-worklog",
-  "version": "0.13.19",
-  "description": "Project Time work-timesheet drafts with manual Harvest writes.",
+  "name": "omp-worklog",
+  "version": "0.14.0",
+  "description": "OMP Project Time work logs with an optional manual Harvest destination.",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -35,8 +35,8 @@
       },
       "command": {
         "type": "string",
-        "default": "harvest-worklog",
-        "description": "Direct path to the harvest-worklog executable; credentials stay in HARVEST_ACCESS_TOKEN and HARVEST_ACCOUNT_ID."
+        "default": "omp-worklog",
+        "description": "Direct path to the omp-worklog executable; credentials stay in HARVEST_ACCESS_TOKEN and HARVEST_ACCOUNT_ID."
       },
       "projectTimeMappings": {
         "type": "string",

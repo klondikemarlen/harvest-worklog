@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Harvest Worklog converts local OMP Project Time evidence into a human-reviewable record of work. The immediate user job is to inspect a concise daily record, correct destination details if necessary, and choose whether to create an external entry.
+OMP Worklog converts local OMP Project Time evidence into a human-reviewable record of work. The immediate user job is to inspect a concise daily record, correct destination details if necessary, and choose whether to create an external entry.
 
 ## Current Product
 
@@ -36,4 +36,4 @@ This direction is compatible with a future integration that writes reviewed entr
 
 ## Non-goals for the Current Release
 
-This documentation does not rename the package, repository, plugin command, settings, or Ruby CLI. It does not alter the Project Time evidence schema, change the existing Harvest write path, add a new destination integration, or publish a documentation site. Those changes need separate compatibility, migration, and release decisions.
+The OMP Worklog identity cutover does not alter the Project Time evidence schema, change the existing Harvest write path, add a new destination integration, or publish a documentation site. Those changes need separate compatibility, migration, and release decisions.

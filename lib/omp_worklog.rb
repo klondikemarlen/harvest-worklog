@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "harvest_worklog/version"
+require "omp_worklog/version"
 require "business_time"
 require "date"
 require "json"
@@ -8,7 +8,7 @@ require "holidays"
 require "optparse"
 require "marlens/harvest_api_v2"
 
-module HarvestWorklog
+module OmpWorklog
   module_function
 
   def dates_between(from, to, holiday_regions:)
@@ -48,10 +48,10 @@ module HarvestWorklog
     def self.usage
       <<~USAGE
         Usage:
-          harvest-worklog time-off FROM TO --project NAME --task NAME [options]
-          harvest-worklog time-off FROM TO --project-id ID --task-id ID [options]
-          harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
-          harvest-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
+          omp-worklog time-off FROM TO --project NAME --task NAME [options]
+          omp-worklog time-off FROM TO --project-id ID --task-id ID [options]
+          omp-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
+          omp-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
 
         Commands:
           time-off    Create one entry per local business day in a date range.
@@ -70,7 +70,7 @@ module HarvestWorklog
 
       from = Date.iso8601(dates[0])
       to = Date.iso8601(dates[1])
-      workdays = HarvestWorklog.dates_between(from, to, holiday_regions: options[:holiday_regions])
+      workdays = OmpWorklog.dates_between(from, to, holiday_regions: options[:holiday_regions])
       raise Error, "date range contains no days to enter" if workdays.empty?
 
       if options[:dry_run]
@@ -93,7 +93,7 @@ module HarvestWorklog
           hours: options[:hours],
           notes: options[:notes]
         )
-        output.puts "Created #{date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
+        output.puts "Created #{date.iso8601}: #{OmpWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
       end
       0
     rescue Error, Marlens::HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
@@ -105,8 +105,8 @@ module HarvestWorklog
     def self.option_parser(options)
       OptionParser.new do |opts|
         opts.banner = <<~USAGE
-          Usage: harvest-worklog time-off FROM TO --project NAME --task NAME [options]
-                 harvest-worklog time-off FROM TO --project-id ID --task-id ID [options]
+          Usage: omp-worklog time-off FROM TO --project NAME --task NAME [options]
+                 omp-worklog time-off FROM TO --project-id ID --task-id ID [options]
 
           Creates one Harvest duration entry for each local business day from FROM through TO.
         USAGE
@@ -170,10 +170,10 @@ module HarvestWorklog
       task = options[:task] || "task ##{options[:task_id]}"
       notes = options[:notes] ? "; #{options[:notes]}" : ""
       dates.each do |date|
-        output.puts "Would create #{date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h on #{project} / #{task}#{notes}"
+        output.puts "Would create #{date.iso8601}: #{OmpWorklog.display_hours(options[:hours])}h on #{project} / #{task}#{notes}"
       end
     end
   end
 end
 
-require "harvest_worklog/work_entry_cli"
+require "omp_worklog/work_entry_cli"

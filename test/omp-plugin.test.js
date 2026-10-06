@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import harvestTimeExtension, { createProjectTimeDraftTool, createProjectTimeProjectNamesLoader, createTimeOffTool, harvestWorklogArgumentCompletions, parseCommandArguments, parseHarvestWorklogArguments, timeOffArguments } from "../index.js"
+import ompWorklogExtension, { createProjectTimeDraftTool, createProjectTimeProjectNamesLoader, createTimeOffTool, ompWorklogArgumentCompletions, parseCommandArguments, parseOmpWorklogArguments, timeOffArguments } from "../index.js"
 
 const schema = () => ({
   regex() { return this },
@@ -24,30 +24,39 @@ const z = {
   }),
 }
 
-test("builds a safe CLI argument vector", () => {
+test("when creating CLI arguments, it normalizes supplied parameters", () => {
+  // Arrange
+  const namedTimeOff = {
+    from: "2026-07-17",
+    to: "2026-07-20",
+    project: " Time Off - Marlen ",
+    task: " Vacation / PTO ",
+    hours: 7.5,
+    notes: " Vacation ",
+    dryRun: true,
+  }
+  const identifiedTimeOff = {
+    from: "2026-07-17",
+    to: "2026-07-20",
+    projectId: 123,
+    taskId: 456,
+    holidayRegions: [" US_CA ", "ca_yt", " "],
+  }
+
+  // Act
+  const namedArguments = timeOffArguments(namedTimeOff)
+  const identifiedArguments = timeOffArguments(identifiedTimeOff, { defaultHours: 6.5, holidayRegions: ["ca_yt", "CA_YT"] })
+
+  // Assert
   assert.deepEqual(
-    timeOffArguments({
-      from: "2026-07-17",
-      to: "2026-07-20",
-      project: " Time Off - Marlen ",
-      task: " Vacation / PTO ",
-      hours: 7.5,
-      notes: " Vacation ",
-      dryRun: true,
-    }),
+    namedArguments,
     [
       "time-off", "2026-07-17", "2026-07-20", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
       "--hours", "7.5", "--notes", "Vacation", "--dry-run",
     ],
   )
   assert.deepEqual(
-    timeOffArguments({
-      from: "2026-07-17",
-      to: "2026-07-20",
-      projectId: 123,
-      taskId: 456,
-      holidayRegions: [" US_CA ", "ca_yt", " "],
-    }, { defaultHours: 6.5, holidayRegions: ["ca_yt", "CA_YT"] }),
+    identifiedArguments,
     [
       "time-off", "2026-07-17", "2026-07-20", "--project-id", "123", "--task-id", "456",
       "--hours", "6.5", "--holiday-region", "ca_yt", "--holiday-region", "us_ca",
@@ -57,7 +66,8 @@ test("builds a safe CLI argument vector", () => {
 
 
 
-test("drafts local Project Time evidence without calling Harvest", async () => {
+test("when reading local evidence, it creates a review-only draft", async () => {
+  // Arrange
   const loads = []
   const tool = createProjectTimeDraftTool(z, {
     loadTransform: async options => {
@@ -77,8 +87,10 @@ test("drafts local Project Time evidence without calling Harvest", async () => {
     },
   })
 
+  // Act
   const result = await tool.execute("draft", { from: "2026-07-20", to: "2026-07-20" })
 
+  // Assert
   assert.equal(tool.approval, "read")
   assert.deepEqual(loads, [{
     from: "2026-07-20",
@@ -93,16 +105,18 @@ test("drafts local Project Time evidence without calling Harvest", async () => {
 })
 
 
-test("registers an approval-gated OMP write tool", async () => {
+test("when time off is requested, it registers an approved write tool", async () => {
+  // Arrange
   const calls = []
   const tool = createTimeOffTool(z, {
-    command: "harvest-worklog",
+    command: "omp-worklog",
     run: async (...args) => {
       calls.push(args)
       return { code: 0, stdout: "Created 2026-07-17", stderr: "" }
     },
   })
 
+  // Act
   const result = await tool.execute(
     "call-1",
     { from: "2026-07-17", to: "2026-07-17", project: "Time Off - Marlen", task: "Vacation / PTO" },
@@ -111,6 +125,7 @@ test("registers an approval-gated OMP write tool", async () => {
     { cwd: "/tmp" },
   )
 
+  // Assert
   assert.equal(tool.approval, "write")
   const accepts = params => tool.parameters.refinements.every(refinement => refinement(params))
   assert.equal(accepts({ project: "PTO", task: "Vacation" }), true)
@@ -123,7 +138,7 @@ test("registers an approval-gated OMP write tool", async () => {
   assert.equal(acceptsUnconfigured({ project: "PTO", task: "Vacation" }), false)
   assert.equal(acceptsUnconfigured({ project: "PTO", task: "Vacation", holidayRegions: ["ca_yt"] }), true)
   assert.deepEqual(calls, [[
-    "harvest-worklog",
+    "omp-worklog",
     [
       "time-off", "2026-07-17", "2026-07-17", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
       "--hours", "7", "--holiday-region", "ca_yt",
@@ -133,7 +148,8 @@ test("registers an approval-gated OMP write tool", async () => {
   assert.equal(result.content[0].text, "Created 2026-07-17")
 })
 
-test("uses configured default hours and holiday regions", async () => {
+test("when defaults and explicit regions are configured, it includes both", async () => {
+  // Arrange
   const calls = []
   const tool = createTimeOffTool(z, {
     defaultHours: 6.5,
@@ -144,6 +160,7 @@ test("uses configured default hours and holiday regions", async () => {
     },
   })
 
+  // Act
   await tool.execute(
     "call-2",
     {
@@ -158,62 +175,61 @@ test("uses configured default hours and holiday regions", async () => {
     { cwd: "/tmp" },
   )
 
+  // Assert
   assert.deepEqual(calls[0][1], [
     "time-off", "2026-08-17", "2026-08-28", "--project", "Time Off - Marlen", "--task", "Vacation / PTO",
     "--hours", "6.5", "--holiday-region", "ca_yt", "--holiday-region", "ca", "--holiday-region", "us_ca",
   ])
 })
 
-test("completes the explicit timesheet hierarchy contextually", () => {
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("").map(item => item.value),
-    ["timesheet", "help"],
-  )
-  assert.deepEqual(harvestWorklogArgumentCompletions("ti").map(item => item.value), ["timesheet"])
-  const dates = harvestWorklogArgumentCompletions("timesheet ")
+test("when completing timesheet arguments, it suggests contextual values", () => {
+  // Arrange
+  const projects = ["Ice Fog Analytics", "wrap", "WRAP"]
+
+  // Act
+  const root = ompWorklogArgumentCompletions("")
+  const prefix = ompWorklogArgumentCompletions("ti")
+  const dates = ompWorklogArgumentCompletions("timesheet ")
+  const timesheet = ompWorklogArgumentCompletions("timesheet")
+  const todayPrefix = ompWorklogArgumentCompletions("timesheet t")
+  const todayOptions = ompWorklogArgumentCompletions("timesheet today ")
+  const projectOptions = ompWorklogArgumentCompletions("timesheet today --project ", projects)
+  const projectPrefix = ompWorklogArgumentCompletions("timesheet today --project w", projects)
+  const spacedProject = ompWorklogArgumentCompletions("timesheet today --project Ice F", projects)
+  const preservedProject = ompWorklogArgumentCompletions("timesheet today --project w", [" wrap "])
+  const selectedProject = ompWorklogArgumentCompletions("timesheet today --project i", projects)[0].value
+  const contextualOptions = ompWorklogArgumentCompletions("timesheet today --project WRAP ")
+  const contextualHelp = contextualOptions.find(item => item.label === "--help")
+  const parsedProject = parseOmpWorklogArguments(selectedProject)
+  const parsedContextualHelp = parseOmpWorklogArguments(contextualHelp.value)
+  const invalidInputs = [
+    ompWorklogArgumentCompletions(`${contextualHelp.value} `),
+    ompWorklogArgumentCompletions("timesheet nonsense "),
+    ompWorklogArgumentCompletions("timesheet today extra "),
+    ompWorklogArgumentCompletions("today "),
+    ompWorklogArgumentCompletions("aggregate "),
+  ]
+
+  // Assert
+  assert.deepEqual(root.map(item => item.value), ["timesheet", "help"])
+  assert.deepEqual(prefix.map(item => item.value), ["timesheet"])
   assert.deepEqual(dates.slice(0, 2).map(item => item.value), ["timesheet today", "timesheet yesterday"])
   assert.match(dates[2].value, /^timesheet \d{4}-\d{2}-\d{2}$/)
-  assert.deepEqual(harvestWorklogArgumentCompletions("timesheet").map(item => item.value), ["timesheet"])
-  assert.deepEqual(harvestWorklogArgumentCompletions("timesheet t").map(item => item.value), ["timesheet today"])
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today ").map(item => item.value),
-    ["timesheet today --project", "timesheet today --help"],
-  )
-  const projects = ["Ice Fog Analytics", "wrap", "WRAP"]
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today --project ", projects).map(item => item.value),
-    ["timesheet today --project \"Ice Fog Analytics\"", "timesheet today --project wrap", "timesheet today --project WRAP"],
-  )
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today --project w", projects).map(item => item.value),
-    ["timesheet today --project wrap", "timesheet today --project WRAP"],
-  )
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today --project Ice F", projects).map(item => item.value),
-    ["timesheet today --project \"Ice Fog Analytics\""],
-  )
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today --project w", [" wrap "]).map(item => item.value),
-    ["timesheet today --project \" wrap \""],
-  )
-  assert.deepEqual(
-    parseHarvestWorklogArguments(harvestWorklogArgumentCompletions("timesheet today --project i", projects)[0].value),
-    { argv: ["timesheet", "today", "--project", "Ice Fog Analytics"] },
-  )
-  assert.deepEqual(
-    harvestWorklogArgumentCompletions("timesheet today --project WRAP ").map(item => item.value),
-    ["timesheet today --project WRAP --help"],
-  )
-  const contextualHelp = harvestWorklogArgumentCompletions("timesheet today --project WRAP ").find(item => item.label === "--help")
-  assert.deepEqual(parseHarvestWorklogArguments(contextualHelp.value), { help: true })
-  assert.equal(harvestWorklogArgumentCompletions(`${contextualHelp.value} `), null)
-  assert.equal(harvestWorklogArgumentCompletions("timesheet nonsense "), null)
-  assert.equal(harvestWorklogArgumentCompletions("timesheet today extra "), null)
-  assert.equal(harvestWorklogArgumentCompletions("today "), null)
-  assert.equal(harvestWorklogArgumentCompletions("aggregate "), null)
+  assert.deepEqual(timesheet.map(item => item.value), ["timesheet"])
+  assert.deepEqual(todayPrefix.map(item => item.value), ["timesheet today"])
+  assert.deepEqual(todayOptions.map(item => item.value), ["timesheet today --project", "timesheet today --help"])
+  assert.deepEqual(projectOptions.map(item => item.value), ["timesheet today --project \"Ice Fog Analytics\"", "timesheet today --project wrap", "timesheet today --project WRAP"])
+  assert.deepEqual(projectPrefix.map(item => item.value), ["timesheet today --project wrap", "timesheet today --project WRAP"])
+  assert.deepEqual(spacedProject.map(item => item.value), ["timesheet today --project \"Ice Fog Analytics\""])
+  assert.deepEqual(preservedProject.map(item => item.value), ["timesheet today --project \" wrap \""])
+  assert.deepEqual(parsedProject, { argv: ["timesheet", "today", "--project", "Ice Fog Analytics"] })
+  assert.deepEqual(contextualOptions.map(item => item.value), ["timesheet today --project WRAP --help"])
+  assert.deepEqual(parsedContextualHelp, { help: true })
+  assert.deepEqual(invalidInputs, [null, null, null, null, null])
 })
 
-test("caches local project names until the log changes", () => {
+test("when log metadata is unchanged, it caches local project names", () => {
+  // Arrange
   let reads = 0
   let mtimeMs = 1
   const loader = createProjectTimeProjectNamesLoader({
@@ -224,41 +240,61 @@ test("caches local project names until the log changes", () => {
     },
   })
 
-  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
-  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
-  assert.equal(reads, 1)
+  // Act
+  const initialNames = loader("/tmp/project-time.json")
+  const cachedNames = loader("/tmp/project-time.json")
+  const readsBeforeChange = reads
   mtimeMs = 2
-  assert.deepEqual(loader("/tmp/project-time.json"), ["wrap"])
+  const changedNames = loader("/tmp/project-time.json")
+
+  // Assert
+  assert.deepEqual(initialNames, ["wrap"])
+  assert.deepEqual(cachedNames, ["wrap"])
+  assert.equal(readsBeforeChange, 1)
+  assert.deepEqual(changedNames, ["wrap"])
   assert.equal(reads, 2)
 })
 
 
-test("parses quoted explicit timesheet arguments", () => {
-  assert.deepEqual(
-    parseCommandArguments("timesheet today --project 'Ice Fog Analytics'"),
-    ["timesheet", "today", "--project", "Ice Fog Analytics"],
-  )
-  assert.deepEqual(
-    parseHarvestWorklogArguments("timesheet today --project 'Ice Fog Analytics'"),
+test("when parsing quoted timesheet arguments, it preserves project values", () => {
+  // Arrange
+  const inputs = [
+    "timesheet today --project 'Ice Fog Analytics'",
+    "timesheet today",
+    "timesheet --help",
+    "timesheet today --help",
+    "today Ice Fog Analytics --task Programming",
+    "timesheet",
+    "timesheet today --task Programming",
+    "timesheet today --project WRAP --task",
+    "timesheet today --project WRAP --task Programming",
+    "timesheet today --project WRAP --bogus x",
+    "timesheet today --project WRAP --project Other",
+    "timesheet nonsense --help",
+    "timesheet --bogus --help",
+    "time-off --help",
+    "timesheet today --project 'WRAP",
+  ]
+
+  // Act
+  const parsedCommand = parseCommandArguments(inputs[0])
+  const parsedOmpArguments = inputs.slice(0, -1).map(parseOmpWorklogArguments)
+  const unclosedQuote = parseCommandArguments(inputs.at(-1))
+
+  // Assert
+  assert.deepEqual(parsedCommand, ["timesheet", "today", "--project", "Ice Fog Analytics"])
+  assert.deepEqual(parsedOmpArguments, [
     { argv: ["timesheet", "today", "--project", "Ice Fog Analytics"] },
-  )
-  assert.deepEqual(parseHarvestWorklogArguments("timesheet today"), { argv: ["timesheet", "today"] })
-  assert.deepEqual(parseHarvestWorklogArguments("timesheet --help"), { help: true })
-  assert.deepEqual(parseHarvestWorklogArguments("timesheet today --help"), { help: true })
-  assert.equal(parseHarvestWorklogArguments("today Ice Fog Analytics --task Programming"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet today --task Programming"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet today --project WRAP --task"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet today --project WRAP --task Programming"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet today --project WRAP --bogus x"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet today --project WRAP --project Other"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet nonsense --help"), null)
-  assert.equal(parseHarvestWorklogArguments("timesheet --bogus --help"), null)
-  assert.equal(parseHarvestWorklogArguments("time-off --help"), null)
-  assert.equal(parseCommandArguments("timesheet today --project 'WRAP"), null)
+    { argv: ["timesheet", "today"] },
+    { help: true },
+    { help: true },
+    null, null, null, null, null, null, null, null, null, null,
+  ])
+  assert.equal(unclosedQuote, null)
 })
 
-test("registers a deterministic no-write Project Time draft command", async () => {
+test("when registering the OMP extension, it exposes a deterministic no-write draft command", async () => {
+  // Arrange
   const tools = []
   const commands = []
   const messages = []
@@ -267,7 +303,8 @@ test("registers a deterministic no-write Project Time draft command", async () =
   const transformLoads = []
   const summaryPlans = []
   let failSummary = false
-  harvestTimeExtension({
+  // Act
+  ompWorklogExtension({
     zod: { z },
     registerTool(tool) { tools.push(tool) },
     registerCommand(name, command) { commands.push({ name, command }) },
@@ -299,7 +336,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
             repositoryIdentity: "github.com/klondikemarlen/wrap",
             activity: `Activity ${index}`,
             workItemAttribution: "explicit_prompt",
-            workItem: { kind: "issue", number: 91 + index, repository: "klondikemarlen/harvest-worklog" },
+            workItem: { kind: "issue", number: 91 + index, repository: "klondikemarlen/omp-worklog" },
             narrative: { text: `Narrative ${index} for WRAP-${123 + index}.` },
             milliseconds: 601_000,
           })),
@@ -309,7 +346,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
     completeProjectTimeSummary: async (ctx, plan) => {
       if (ctx.hasUI) {
         assert.deepEqual(widgets.at(-1), {
-          key: "harvest-worklog-timesheet-summary",
+          key: "omp-worklog-timesheet-summary",
           content: ["Generating work summary…"],
           options: { placement: "aboveEditor" },
         })
@@ -327,13 +364,14 @@ test("registers a deterministic no-write Project Time draft command", async () =
   }
   const command = commands[0].command
 
-  assert.equal(commands[0].name, "harvest-worklog")
+  // Assert
+  assert.equal(commands[0].name, "omp-worklog")
   assert.deepEqual(
     command.getArgumentCompletions("timesheet today --project w").map(item => item.value),
     ["timesheet today --project wrap"],
   )
   await command.handler("", { cwd: "/tmp", ui })
-  assert.match(notifications[0].message, /\/harvest-worklog timesheet DATE \[--project PROJECT\]/)
+  assert.match(notifications[0].message, /\/omp-worklog timesheet DATE \[--project PROJECT\]/)
 
   await command.handler("timesheet 2026-07-20", { cwd: "/tmp", ui })
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: true })
@@ -361,15 +399,15 @@ test("registers a deterministic no-write Project Time draft command", async () =
   )
   assert.doesNotMatch(messages[0].message.content, /Task:|Review:|Work items|Source evidence|entry-0|repository-id|Narrative 0/)
   assert.equal(messages.length, 3)
-  assert.equal(messages[1].message.customType, "harvest-worklog-timesheet-summary")
+  assert.equal(messages[1].message.customType, "omp-worklog-timesheet-summary")
   assert.equal(messages[1].message.content, "AI-generated work summary unavailable (review before use).")
-  assert.equal(messages[2].message.customType, "harvest-worklog-timesheet")
+  assert.equal(messages[2].message.customType, "omp-worklog-timesheet")
   assert.equal(messages[2].message.content.split("\n").length <= 22, true)
   assert.deepEqual(messages[2].options, { triggerTurn: false })
   assert.equal(summaryPlans[0].entries[0].sources.length, 40)
   assert.equal(widgets.length, 2)
   assert.deepEqual(widgets[0], {
-    key: "harvest-worklog-timesheet-summary",
+    key: "omp-worklog-timesheet-summary",
     content: ["Generating work summary…"],
     options: { placement: "aboveEditor" },
   })
@@ -390,7 +428,7 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.deepEqual(transformLoads[2], transformLoads[1])
   assert.equal(messages.length, 4)
   assert.deepEqual(widgets[3], {
-    key: "harvest-worklog-timesheet-summary",
+    key: "omp-worklog-timesheet-summary",
     content: ["AI-generated work summary unavailable (review before use)."],
     options: { placement: "aboveEditor" },
   })
@@ -403,13 +441,13 @@ test("registers a deterministic no-write Project Time draft command", async () =
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, model: {}, hasUI: false })
   assert.deepEqual(transformLoads[3], transformLoads[1])
   assert.equal(widgets.length, 4)
-  assert.equal(messages[5].message.customType, "harvest-worklog-timesheet-summary")
+  assert.equal(messages[5].message.customType, "omp-worklog-timesheet-summary")
   assert.match(messages[5].message.content, /Suggested Harvest note \(review before use\): Ready for Harvest\./)
   await command.handler("timesheet 2026-07-20 --project wrap", { cwd: "/tmp", ui, hasUI: true })
   assert.deepEqual(transformLoads[4], transformLoads[1])
   assert.equal(messages.length, 7)
   assert.deepEqual(widgets.at(-1), {
-    key: "harvest-worklog-timesheet-summary",
+    key: "omp-worklog-timesheet-summary",
     content: ["AI-generated work summary unavailable (review before use)."],
     options: { placement: "aboveEditor" },
   })
@@ -418,10 +456,10 @@ test("registers a deterministic no-write Project Time draft command", async () =
   assert.deepEqual(
     tools.map(tool => tool.name),
     [
-      "harvest_record_time_off",
-      "harvest_preview_project_time_drafts",
-      "harvest_preview_project_time_transforms",
+      "omp_worklog_record_time_off",
+      "omp_worklog_preview_project_time_drafts",
+      "omp_worklog_preview_project_time_transforms",
     ],
   )
-  assert.deepEqual(tools.filter(tool => tool.approval === "write").map(tool => tool.name), ["harvest_record_time_off"])
+  assert.deepEqual(tools.filter(tool => tool.approval === "write").map(tool => tool.name), ["omp_worklog_record_time_off"])
 })

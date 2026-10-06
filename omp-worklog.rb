@@ -2,6 +2,6 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
-require "harvest_worklog"
+require "omp_worklog"
 
-exit HarvestWorklog::CLI.run(ARGV)
+exit OmpWorklog::CLI.run(ARGV)

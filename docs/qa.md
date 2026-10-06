@@ -8,7 +8,7 @@ The current behavior is covered by focused tests in the repository:
 | --- | --- |
 | Project Time evidence parsing, filtering, grouping, mappings, drafts, and compact timesheet formatting | `test/project-time.test.js` |
 | OMP command parsing, completions, read-only draft tools, write approval, and interactive summary lifecycle | `test/omp-plugin.test.js` |
-| Harvest CLI validation and write behavior | `test_harvest_worklog.rb` |
+| Harvest destination adapter validation and write behavior | `test_omp_worklog.rb` |
 | Installed plugin revision verification failure behavior | `test/release-plugin.test.js` |
 
 Run the relevant JavaScript suite with:
@@ -20,13 +20,13 @@ npm test
 Run the Ruby CLI suite with:
 
 ```bash
-ruby test_harvest_worklog.rb
+ruby test_omp_worklog.rb
 ```
 
 For a no-write CLI smoke check, run:
 
 ```bash
-bin/harvest-worklog --help
+bin/omp-worklog --help
 ```
 
 ## Documentation Verification

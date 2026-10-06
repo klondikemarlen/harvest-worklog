@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module HarvestWorklog
+module OmpWorklog
   class WorkEntryCLI
     EXISTING_ENTRY = 2
     LOCKED_ENTRY = 3
@@ -44,7 +44,7 @@ module HarvestWorklog
       if options[:dry_run]
         project = options[:project] || "project ##{options[:project_id]}"
         task = options[:task] || "task ##{options[:task_id]}"
-        output.puts "Would create #{spent_date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h on #{project} / #{task}; #{options[:notes]}"
+        output.puts "Would create #{spent_date.iso8601}: #{OmpWorklog.display_hours(options[:hours])}h on #{project} / #{task}; #{options[:notes]}"
         return 0
       end
 
@@ -55,7 +55,7 @@ module HarvestWorklog
         hours: options[:hours],
         notes: options[:notes]
       )
-      output.puts "Created #{spent_date.iso8601}: #{HarvestWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
+      output.puts "Created #{spent_date.iso8601}: #{OmpWorklog.display_hours(options[:hours])}h (entry ##{entry.fetch("id")})"
       0
     rescue Error, Marlens::HarvestApiV2::Error, OptionParser::ParseError, Date::Error => e
       error.puts "Error: #{e.message}"
@@ -66,8 +66,8 @@ module HarvestWorklog
     def self.option_parser(options)
       OptionParser.new do |opts|
         opts.banner = <<~USAGE
-          Usage: harvest-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
-                 harvest-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
+          Usage: omp-worklog work-entry DATE --project NAME --task NAME --hours HOURS --notes NOTES [options]
+                 omp-worklog work-entry DATE --project-id ID --task-id ID --hours HOURS --notes NOTES [options]
         USAGE
         opts.on("--project NAME", "Harvest project name") { |value| options[:project] = value }
         opts.on("--task NAME", "Harvest task name") { |value| options[:task] = value }

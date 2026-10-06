@@ -6,20 +6,20 @@ cd "$root"
 version="$(node -p 'require("./package.json").version')"
 expected_revision="$(git rev-parse HEAD)"
 plugin_root="$HOME/.omp/plugins"
-installed_path="$plugin_root/node_modules/harvest-worklog/package.json"
-installed_version="$(node -p 'require(process.env.HOME + "/.omp/plugins/node_modules/harvest-worklog/package.json").version')"
+installed_path="$plugin_root/node_modules/omp-worklog/package.json"
+installed_version="$(node -p 'require(process.env.HOME + "/.omp/plugins/node_modules/omp-worklog/package.json").version')"
 resolved_revision="$(node -e '
 const lock = require("node:fs").readFileSync(process.argv[1], "utf8")
-const match = /"harvest-worklog"\s*:\s*\[\s*"harvest-worklog@github:klondikemarlen\/harvest-worklog#([0-9a-f]+)/.exec(lock)
+const match = /"omp-worklog"\s*:\s*\[\s*"omp-worklog@github:klondikemarlen\/omp-worklog#([0-9a-f]+)/.exec(lock)
 if (!match) process.exit(1)
 process.stdout.write(match[1])
 ' "$plugin_root/bun.lock")" || {
-  printf 'Could not resolve the installed harvest-worklog Git revision from %s.\n' "$plugin_root/bun.lock" >&2
+  printf 'Could not resolve the installed omp-worklog Git revision from %s.\n' "$plugin_root/bun.lock" >&2
   exit 1
 }
 if [[ "$installed_version" != "$version" || "${expected_revision:0:${#resolved_revision}}" != "$resolved_revision" ]]; then
-  printf 'Expected installed harvest-worklog@%s from Git revision %s; found harvest-worklog@%s at %s resolved from Git revision %s.\n' "$version" "$expected_revision" "$installed_version" "$installed_path" "$resolved_revision" >&2
+  printf 'Expected installed omp-worklog@%s from Git revision %s; found omp-worklog@%s at %s resolved from Git revision %s.\n' "$version" "$expected_revision" "$installed_version" "$installed_path" "$resolved_revision" >&2
   exit 1
 fi
-node --test "$plugin_root/node_modules/harvest-worklog/test/"*.test.js
-printf 'Verified harvest-worklog@%s from Git revision %s at %s.\n' "$version" "$resolved_revision" "$installed_path"
+node --test "$plugin_root/node_modules/omp-worklog/test/"*.test.js
+printf 'Verified omp-worklog@%s from Git revision %s at %s.\n' "$version" "$resolved_revision" "$installed_path"

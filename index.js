@@ -18,7 +18,7 @@ function normalizeHolidayRegions(regions) {
 }
 
 function normalizeCommand(command) {
-  return command?.trim() || "harvest-worklog"
+  return command?.trim() || "omp-worklog"
 }
 
 function nonBlankString(z) {
@@ -92,7 +92,7 @@ export function createProjectTimeTransformTool(
 ) {
   projectTimeLogPath = projectTimeLogPath.trim()
   return {
-    name: "harvest_preview_project_time_transforms",
+    name: "omp_worklog_preview_project_time_transforms",
     label: "Preview Project Time Evidence",
     description: "Preview local Project Time intervals grouped by date and activity. This never writes Harvest.",
     approval: "read",
@@ -141,7 +141,7 @@ export function createProjectTimeDraftTool(
 ) {
   projectTimeLogPath = projectTimeLogPath.trim()
   return {
-    name: "harvest_preview_project_time_drafts",
+    name: "omp_worklog_preview_project_time_drafts",
     label: "Preview Inferred Work Timesheet",
     description: "Create a deterministic, copyable work-timesheet draft from human-active OMP Project Time evidence. Configured mappings identify Harvest destinations; every other local project remains a review-required draft. This reads the local log only and never writes Harvest.",
     approval: "read",
@@ -178,11 +178,11 @@ function hasValidAssignment({ project, task, projectId, taskId }) {
   return (Boolean(project && task) && !anyIds) || (projectId !== undefined && taskId !== undefined && !anyNames)
 }
 
-export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours = 7, holidayRegions = "ca_yt", run = runCommand } = {}) {
+export function createTimeOffTool(z, { command = "omp-worklog", defaultHours = 7, holidayRegions = "ca_yt", run = runCommand } = {}) {
   command = normalizeCommand(command)
   const configuredHolidayRegions = normalizeHolidayRegions(holidayRegions.split(","))
   return {
-    name: "harvest_record_time_off",
+    name: "omp_worklog_record_time_off",
     label: "Record Time Off",
     description: "Create one Harvest duration entry for each local business day in an inclusive date range. Supply either project/task names or project/task IDs; optional holidayRegions add repeatable CLI regions. Verify all values before calling; this mutates Harvest.",
     approval: "write",
@@ -221,9 +221,9 @@ export function createTimeOffTool(z, { command = "harvest-worklog", defaultHours
   }
 }
 
-const HARVEST_WORKLOG_USAGE = [
+const OMP_WORKLOG_USAGE = [
   "Usage:",
-  "  /harvest-worklog timesheet DATE [--project PROJECT]",
+  "  /omp-worklog timesheet DATE [--project PROJECT]",
   "",
   "DATE: today, yesterday, or YYYY-MM-DD",
 ].join("\n")
@@ -246,7 +246,7 @@ const TIMESHEET_FLAGS = {
   "--help": "Show local Project Time timesheet help",
 }
 
-export function harvestWorklogArgumentCompletions(argumentPrefix, projects = []) {
+export function ompWorklogArgumentCompletions(argumentPrefix, projects = []) {
   const input = argumentPrefix
   const trimmed = input.trim()
 
@@ -395,7 +395,7 @@ function isTimesheetForm(words, allowIncomplete = false) {
   return words.length === 4
 }
 
-export function parseHarvestWorklogArguments(args) {
+export function parseOmpWorklogArguments(args) {
   const input = args.trim()
   if (input === "help") return { help: true }
 
@@ -425,7 +425,7 @@ async function completeProjectTimeSummary(ctx, plan) {
 }
 
 async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
-  const widgetKey = "harvest-worklog-timesheet-summary"
+  const widgetKey = "omp-worklog-timesheet-summary"
   const replaceInWidget = ctx.hasUI && typeof ctx.ui.setWidget === "function"
   let summary = ""
   if (ctx.model) {
@@ -453,21 +453,21 @@ async function requestProjectTimeSummary(pi, ctx, plan, completeSummary) {
   }, { triggerTurn: false })
 }
 
-export default function harvestTimeExtension(pi, options = {}) {
-  pi.setLabel?.("Harvest Worklog")
+export default function ompWorklogExtension(pi, options = {}) {
+  pi.setLabel?.("OMP Worklog")
   const command = normalizeCommand(options.command)
   const projectTimeMappings = options.projectTimeMappings?.trim() || "{}"
   const projectTimeLogPath = options.projectTimeLogPath?.trim() || ""
   const loadTransform = options.loadProjectTimeTransform ?? loadProjectTimeTransform
   const loadProjects = options.loadProjectTimeProjectNames ?? createProjectTimeProjectNamesLoader()
   const completeSummary = options.completeProjectTimeSummary ?? completeProjectTimeSummary
-  pi.registerCommand("harvest-worklog", {
+  pi.registerCommand("omp-worklog", {
     description: "Build a review-only multi-project timesheet from local OMP Project Time",
-    getArgumentCompletions: input => harvestWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
+    getArgumentCompletions: input => ompWorklogArgumentCompletions(input, loadProjects(projectTimeLogPath)),
     handler: async (args, ctx) => {
-      const parsed = parseHarvestWorklogArguments(args)
+      const parsed = parseOmpWorklogArguments(args)
       if (!parsed || parsed.help) {
-        ctx.ui.notify(HARVEST_WORKLOG_USAGE, parsed?.help ? "info" : "error")
+        ctx.ui.notify(OMP_WORKLOG_USAGE, parsed?.help ? "info" : "error")
         return
       }
 
@@ -485,7 +485,7 @@ export default function harvestTimeExtension(pi, options = {}) {
         })
 
         pi.sendMessage({
-          customType: "harvest-worklog-timesheet",
+          customType: "omp-worklog-timesheet",
           content: formatProjectTimeCommandSummary(plan),
           display: true,
           attribution: "assistant",

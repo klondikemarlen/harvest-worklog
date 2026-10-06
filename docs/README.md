@@ -1,6 +1,6 @@
-# Harvest Worklog Knowledge Base
+# OMP Worklog Knowledge Base
 
-Harvest Worklog turns local OMP Project Time evidence into reviewable work-log output. Its current published package contains Harvest-specific write adapters, but the durable product direction is a provider-neutral time log that can project to Harvest or another destination only after review.
+OMP Worklog turns local OMP Project Time evidence into reviewable work-log output. Its current published package contains a Harvest-specific write adapter, but the durable product direction is a provider-neutral time log that can project to Harvest or another destination only after review.
 
 ## Start Here
 
@@ -17,7 +17,7 @@ Harvest Worklog turns local OMP Project Time evidence into reviewable work-log o
 | Product purpose, boundaries, and intended direction | This knowledge base |
 | Public installation, settings, command usage, and release procedure | [repository README](../README.md) |
 | Runtime behavior and implementation decisions at component level | The owning source file and its adjacent tests |
-| Automated acceptance evidence | `test/`, `test_harvest_worklog.rb`, and command output from the relevant check |
+| Automated acceptance evidence | `test/`, `test_omp_worklog.rb`, and command output from the relevant check |
 | OMP Project Time evidence schema and collection semantics | The upstream OMP Project Time project |
 
 Keep component-local details—function contracts, parsing rules, error cases, and test fixtures—beside the code that owns them. Summarize only durable cross-component knowledge here.
