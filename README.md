@@ -54,13 +54,13 @@ The `work-entry` command checks for existing or locked entries for its project, 
 
 ### Project Time timesheets
 
-`/omp-worklog timesheet DATE` reads local `human_active` Project Time evidence and produces one review-only draft for every local project active on that day. It does not call Harvest or require Harvest credentials.
+`/worklog timesheet DATE` reads local `human_active` Project Time evidence and produces one review-only draft for every local project active on that day. It does not call Harvest or require Harvest credentials.
 
 Use `--project PROJECT` only to restrict the draft to one exact local Project Time project:
 
 ```text
-/omp-worklog timesheet yesterday
-/omp-worklog timesheet yesterday --project wrap
+/worklog timesheet yesterday
+/worklog timesheet yesterday --project wrap
 ```
 
 A configured `projectTimeMappings` destination becomes the draft's Harvest `Project` and `Task`. Evidence with no mapping, an ambiguous work item, or an unassigned work item remains visible under its exact local project with `Harvest: Review destination`; choose the Harvest project and task before submitting. The command first renders date, local project, duration, and Harvest destination on separate lines in a single column, bounded to 22 physical lines. In interactive OMP sessions, a keyed `Generating work summary…` widget appears while the active model works and is replaced in place by the final summary or unavailable fallback. Summary evidence is ranked by cumulative workstream duration so structured repository and GitHub issue/PR context outweighs fragmented individual prompts. The final generated section contains one to three broad outcome bullets and a suggested Harvest note, remains bounded before display, and keeps the combined result within 30 logical lines. GitHub issue/PR numbers and Jira ticket IDs are extracted as facts, not inferred by the model. `harvest_preview_project_time_drafts` retains source IDs, source kinds, repository identities, intervals, work-item attribution, and narratives for detailed review. Nothing is submitted automatically.
@@ -77,7 +77,7 @@ User stories:
 
 The observable contract is a deterministic block of at most 22 physical lines followed by a generated section of at most six lines, keeping the complete result within 30 logical lines. Every total stacks date, exact local project, aggregate duration, and configured Harvest project/task or `Review destination` on separate lines. The generated section uses the `AI-generated work summary (review before use)` heading, one to three concise outcome bullets derived from at most eight duration-ranked evidence records, and a clearly review-marked suggested Harvest note. Generated lines are capped at 100 characters with an ellipsis so one verbose model line cannot consume the screen. In interactive mode, one keyed OMP widget is updated from the generation state to final content; print and RPC modes retain a normal transcript message. The command remains review-only and never writes Harvest.
 
-Type `/omp-worklog ` in OMP to discover `timesheet`; date aliases appear after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names. Completion preserves the exact local project name.
+Type `/worklog ` in OMP to discover `timesheet`; date aliases appear after selecting `timesheet `. After `--project`, Tab lists local human-active Project Time project names. Completion preserves the exact local project name.
 
 ## OMP settings
 
@@ -109,7 +109,7 @@ OMP Worklog reads Project Time's persisted `omp-project-time/evidence` v1 entrie
 
 ## Migration from Harvest Worklog
 
-Version `0.14.0` is a clean identity cutover. Uninstall the retired `harvest-worklog` gem and OMP plugin, then install `omp-worklog`; replace former `harvest-worklog` CLI and `/harvest-worklog` command invocations with `omp-worklog` and `/omp-worklog`. The retired package, executable, command, tools, module, and settings aliases are not retained.
+Version `0.14.0` is a clean identity cutover. Uninstall the retired `harvest-worklog` gem and OMP plugin, then install `omp-worklog`; replace former `harvest-worklog` CLI and `/harvest-worklog` command invocations with `omp-worklog` and `/worklog`. The retired package, executable, command, tools, module, and settings aliases are not retained.
 
 ## Release
 
